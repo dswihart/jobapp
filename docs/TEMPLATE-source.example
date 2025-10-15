@@ -1,0 +1,183 @@
+/**
+ * TEMPLATE Job Source
+ * Copy this file and customize it to add your own job source
+ *
+ * Steps to add a new source:
+ * 1. Copy this file to: sources/yourname-source.ts
+ * 2. Rename the class: YourNameSource
+ * 3. Update the config (name, type, etc.)
+ * 4. Implement fetchJobs() method
+ * 5. Add to sources/index.ts
+ * 6. Test with: npm run test-source yourname
+ */
+
+import { BaseJobSource, JobPosting, JobSourceConfig } from '../job-source-interface'
+
+// Define the API response type from your job board
+interface YourJobBoardJob {
+  // Example fields - adjust based on your API
+  id: number | string
+  title: string
+  company: string
+  description: string
+  location?: string
+  posted_date?: string
+  url?: string
+  // Add more fields as needed
+}
+
+export class YourNameSource extends BaseJobSource {
+  config: JobSourceConfig = {
+    name: 'Your Job Board Name',    // Display name
+    enabled: true,                   // Set to false to disable
+    type: 'api',                     // 'api' or 'rss'
+    rateLimitPerHour: 100           // Optional: requests per hour limit
+  }
+
+  // Your API endpoint
+  private readonly API_URL = 'https://api.yourjobboard.com/jobs'
+
+  // Optional: API key if needed
+  private readonly API_KEY = process.env.YOUR_JOB_BOARD_API_KEY
+
+  async fetchJobs(skills: string[], limit: number = 50): Promise<JobPosting[]> {
+    try {
+      this.log('Fetching jobs...')
+
+      // Step 1: Make API request
+      const response = await fetch(`${this.API_URL}?limit=${limit}`, {
+        headers: {
+          'Accept': 'application/json',
+          // Add API key header if needed:
+          // 'Authorization': `Bearer ${this.API_KEY}`,
+          // 'X-API-Key': this.API_KEY
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+
+      const data = await response.json()
+
+      // Step 2: Extract jobs array from response
+      // Adjust based on your API's response format
+      const jobs = data.jobs || data.results || data.data || []
+
+      if (!Array.isArray(jobs)) {
+        throw new Error('Invalid response format - expected array')
+      }
+
+      this.log(`Received ${jobs.length} jobs`)
+
+      // Step 3: Filter by skills (match skills in title/description)
+      const skillFiltered = this.filterBySkills(
+        jobs,
+        skills,
+        (job: YourJobBoardJob) => `${job.title} ${job.description}`
+      )
+
+      // Step 4: Filter by recency (optional - last 7 days)
+      const recentJobs = this.filterByRecency(
+        skillFiltered,
+        7,  // days
+        (job: YourJobBoardJob) => new Date(job.posted_date || new Date())
+      )
+
+      // Step 5: Map to standard JobPosting format
+      const standardJobs: JobPosting[] = recentJobs
+        .slice(0, 20)  // Limit results
+        .map((job: YourJobBoardJob) => ({
+          title: job.title,
+          company: job.company,
+          description: job.description,
+          requirements: undefined,  // Add if available
+          location: job.location || 'Not specified',
+          salary: undefined,  // Add if available
+          jobUrl: job.url || `https://yourjobboard.com/jobs/${job.id}`,
+          postedDate: job.posted_date ? new Date(job.posted_date) : undefined,
+          source: this.config.name
+        }))
+
+      this.log(`Filtered to ${standardJobs.length} relevant jobs`)
+      return standardJobs
+
+    } catch (error) {
+      this.log(`Error: ${error}`, 'error')
+      return []
+    }
+  }
+
+  /**
+   * Optional: Override health check if needed
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      const response = await fetch(this.API_URL, { method: 'HEAD' })
+      return response.ok
+    } catch {
+      return false
+    }
+  }
+}
+
+/**
+ * EXAMPLE: RSS Feed Source
+ * Use this pattern if your job board provides RSS instead of API
+ */
+export class YourRSSSource extends BaseJobSource {
+  config: JobSourceConfig = {
+    name: 'Your RSS Job Board',
+    enabled: true,
+    type: 'rss'
+  }
+
+  private readonly RSS_URL = 'https://yourjobboard.com/jobs.rss'
+
+  async fetchJobs(skills: string[], limit: number = 50): Promise<JobPosting[]> {
+    try {
+      this.log('Fetching RSS feed...')
+
+      const response = await fetch(this.RSS_URL)
+      const rssText = await response.text()
+
+      // Parse RSS XML (you'll need an XML parser)
+      // Example using simple regex (better to use a proper XML parser):
+      const itemRegex = /<item>(.*?)<\/item>/gs
+      const items = rssText.match(itemRegex) || []
+
+      const jobs: JobPosting[] = items
+        .slice(0, limit)
+        .map(match => {
+          const itemXml = match[1]
+
+          // Extract fields (adjust regex based on your RSS format)
+          const title = itemXml.match(/<title>(.*?)<\/title>/)?.[1] || ''
+          const link = itemXml.match(/<link>(.*?)<\/link>/)?.[1] || ''
+          const description = itemXml.match(/<description>(.*?)<\/description>/)?.[1] || ''
+          const pubDate = itemXml.match(/<pubDate>(.*?)<\/pubDate>/)?.[1]
+
+          return {
+            title,
+            company: 'Unknown',  // Extract from description if available
+            description,
+            jobUrl: link,
+            postedDate: pubDate ? new Date(pubDate) : undefined,
+            source: this.config.name
+          }
+        })
+        .filter(job => {
+          // Filter by skills
+          const jobText = `${job.title} ${job.description}`.toLowerCase()
+          return skills.some(skill => jobText.includes(skill.toLowerCase()))
+        })
+
+      this.log(`Filtered to ${jobs.length} relevant jobs`)
+      return jobs
+
+    } catch (error) {
+      this.log(`Error: ${error}`, 'error')
+      return []
+    }
+  }
+}

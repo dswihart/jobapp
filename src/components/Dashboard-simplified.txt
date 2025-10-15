@@ -1,0 +1,21 @@
+# Just update these classes in the existing Dashboard.tsx:
+
+1. Header container:
+   Change: className=max-w-7xl mx-auto px-4 sm:px-6 lg:px-8
+   To: className=max-w-7xl mx-auto px-3 sm:px-4 lg:px-8
+
+2. Title:
+   Change: className=text-3xl font-bold text-gray-900 dark:text-white  
+   To: className=text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-white
+
+3. Subtitle:
+   Change: className=text-gray-600 dark:text-gray-400
+   To: className=text-xs sm:text-sm text-gray-600 dark:text-gray-400 hidden sm:block
+
+4. Button container:
+   Change: className=flex space-x-4
+   To: className=flex gap-2 overflow-x-auto scrollbar-hide flex-wrap sm:flex-nowrap
+
+5. Add Application button:
+   Change: className=bg-blue-600 hover:bg-blue-700... px-4 py-2
+   To: className=bg-blue-600 hover:bg-blue-700... px-3 sm:px-4 py-2 text-sm

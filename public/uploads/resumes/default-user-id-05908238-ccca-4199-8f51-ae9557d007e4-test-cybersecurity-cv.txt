@@ -1,0 +1,47 @@
+John Smith
+Cybersecurity Engineer
+Barcelona, Spain
+john.smith@email.com | +34 123 456 789
+
+PROFESSIONAL SUMMARY
+Senior cybersecurity professional with 8+ years of experience in security architecture, penetration testing, and threat analysis. Specialized in cloud security, network security, and security operations. Proven track record of implementing robust security frameworks and incident response protocols.
+
+SKILLS
+Primary: Cybersecurity, Penetration Testing, Security Architecture, Threat Analysis, SIEM, Security Operations
+Secondary: Python, Bash, Splunk, AWS Security, Azure Security, Firewall Management, IDS/IPS
+Learning: Kubernetes Security, Zero Trust Architecture, Security Automation
+
+WORK EXPERIENCE
+
+Senior Cybersecurity Engineer | SecureCloud Inc | 2020-Present
+- Led security architecture design for cloud infrastructure serving 10M+ users
+- Implemented SIEM solution reducing incident detection time by 60%
+- Conducted penetration testing and vulnerability assessments quarterly
+- Developed automated security monitoring tools using Python
+
+Information Security Engineer | TechCorp | 2018-2020
+- Managed enterprise firewall and IDS/IPS systems
+- Performed security audits and compliance assessments (ISO 27001, SOC 2)
+- Responded to security incidents and coordinated remediation efforts
+- Created security awareness training programs for 500+ employees
+
+Security Analyst | DataSafe Solutions | 2016-2018
+- Monitored security events using Splunk SIEM
+- Analyzed threats and created incident reports
+- Assisted with vulnerability scanning and patch management
+- Supported SOC operations 24/7 rotation
+
+EDUCATION
+Master of Science in Cybersecurity | University of Barcelona | 2016
+Bachelor of Science in Computer Science | Technical University of Catalonia | 2014
+
+CERTIFICATIONS
+- CISSP (Certified Information Systems Security Professional)
+- CEH (Certified Ethical Hacker)
+- OSCP (Offensive Security Certified Professional)
+- AWS Certified Security - Specialty
+
+PREFERENCES
+Job Titles: Cybersecurity Engineer, Senior Security Engineer, Security Architect
+Work Preference: Hybrid in Barcelona or Remote in Spain
+Availability: 2 weeks notice

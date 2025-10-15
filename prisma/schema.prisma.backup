@@ -1,0 +1,151 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  skills    String[]
+  experience String?
+  resumeUrl String?
+
+  // Enhanced profile fields
+  summary          String?   @db.Text
+  location         String?
+  salaryExpectation String?
+  workPreference   String?
+  availability     String?
+
+  yearsOfExperience Int?
+  seniorityLevel   String?
+
+  // Job search preferences
+  minFitScore      Int?     @default(40)
+  maxJobAgeDays    Int?     @default(7)
+  autoScan         Boolean? @default(false)
+  scanFrequency    String?  @default("daily")
+
+  education        String[]  @default([])
+  primarySkills    String[]  @default([])
+  secondarySkills  String[]  @default([])
+  learningSkills   String[]  @default([])
+
+  jobTitles        String[]  @default([])
+  industries       String[]  @default([])
+  excludeKeywords  String[]  @default([])
+
+  workHistory      Json?
+  extractedProfile Json?
+  lastExtracted    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  applications Application[]
+  opportunities JobOpportunity[]
+  alerts       Alert[]
+  contacts     Contact[]
+
+  @@map("users")
+}
+
+model Application {
+  id          String      @id @default(cuid())
+  company     String
+  role        String
+  status      ApplicationStatus @default(APPLIED)
+  notes       String?
+  jobUrl      String?
+  appliedDate DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  contacts Contact[]
+
+  @@map("applications")
+}
+
+model Contact {
+  id        String   @id @default(cuid())
+  name      String
+  title     String?
+  email     String?
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId        String
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("contacts")
+}
+
+enum ApplicationStatus {
+  APPLIED
+  INTERVIEWING
+  PENDING
+  REJECTED
+}
+model JobOpportunity {
+  id          String   @id @default(cuid())
+  title       String
+  company     String
+  description String   @db.Text
+  requirements String? @db.Text
+  location    String?
+  salary      String?
+  jobUrl      String   @unique
+  source      String   // e.g., "LinkedIn", "Indeed", "Custom"
+  postedDate  DateTime?
+  scrapedAt   DateTime @default(now())
+  isRead      Boolean  @default(false)
+  isArchived  Boolean  @default(false)
+  fitScore    Float?
+  userFeedback String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  alerts Alert[]
+
+  @@map("job_opportunities")
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  message   String
+  type      AlertType @default(NEW_JOB)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  opportunityId String?
+  opportunity   JobOpportunity? @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+enum AlertType {
+  NEW_JOB
+  APPLICATION_UPDATE
+  REMINDER
+}

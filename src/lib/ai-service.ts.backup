@@ -1,0 +1,324 @@
+/**
+ * Enhanced AI Job Matching Service
+ * Uses detailed user profile and LLM for better matching
+ */
+
+import Anthropic from '@anthropic-ai/sdk'
+
+// Export basic interfaces for backward compatibility
+export interface UserProfile {
+  skills: string[]
+  secondarySkills?: string[]
+  jobTitles?: string[]
+  seniorityLevel?: string | null
+  experience?: string
+  education?: string
+  preferredRoles?: string[]
+}
+
+export interface JobDescription {
+  title: string
+  description: string
+  requirements?: string
+  company?: string
+  location?: string
+  salary?: string
+}
+
+interface EnhancedUserProfile {
+  primarySkills: string[]
+  secondarySkills: string[]
+  learningSkills: string[]
+  yearsOfExperience?: number
+  seniorityLevel?: string
+  workHistory?: Array<{
+    company: string
+    role: string
+    duration: string
+    achievements: string[]
+  }>
+  jobTitles?: string[]
+  industries?: string[]
+  summary?: string
+  workPreference?: string
+  salaryExpectation?: string
+}
+
+interface EnhancedFitScore {
+  overall: number
+  skillMatch: number
+  experienceMatch: number
+  seniorityMatch: number
+  titleMatch: number
+  industryMatch: number
+  locationMatch: number
+  reasoning: string
+  matchedSkills: string[]
+  missingSkills: string[]
+  recommendations: string[]
+  strengths: string[]
+  concerns: string[]
+}
+
+/**
+ * Enhanced AI matching using Claude
+ */
+export async function analyzeJobFitEnhanced(
+  userProfile: EnhancedUserProfile,
+  jobDescription: JobDescription
+): Promise<EnhancedFitScore> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+
+  if (!apiKey) {
+    // Fallback to basic matching if no API key
+    return fallbackMatching(userProfile, jobDescription)
+  }
+
+  try {
+    const anthropic = new Anthropic({ apiKey })
+
+    const prompt = `You are an expert career advisor and job matching AI. Analyze how well this SPECIFIC candidate matches the job posting.
+
+**CRITICAL MATCHING RULES:**
+1. The candidate's job titles MUST align with the role (e.g., "Security Engineer" should NOT match "Data Engineer" or "Legal" roles)
+2. Primary skills are the candidate's CORE expertise - these MUST be required or highly relevant for a strong match
+3. If the job title/role is completely different from the candidate's preferred titles, the match should be LOW (<40%)
+4. Consider the candidate's work preference for location matching
+
+**Candidate Profile:**
+- Primary Skills (Core Expertise): ${userProfile.primarySkills.join(', ')}
+- Secondary Skills: ${userProfile.secondarySkills.join(', ')}
+- Learning/Familiar: ${userProfile.learningSkills?.join(', ') || 'None'}
+- Years of Experience: ${userProfile.yearsOfExperience || 'Unknown'}
+- Seniority Level: ${userProfile.seniorityLevel || 'Unknown'}
+- Recent Roles: ${userProfile.workHistory?.slice(0, 3).map(w => w.role).join(', ') || 'Not provided'}
+- **Preferred Job Titles (MUST MATCH)**: ${userProfile.jobTitles?.join(', ') || 'Any'}
+- Target Industries: ${userProfile.industries?.join(', ') || 'Any'}
+- **Work Preference (LOCATION CONSTRAINT)**: ${userProfile.workPreference || 'Not specified'}
+- Professional Summary: ${userProfile.summary || 'Not provided'}
+
+**Job Posting:**
+Title: ${jobDescription.title}
+Company: ${jobDescription.company}
+Location: ${jobDescription.location || 'Not specified'}
+Salary: ${jobDescription.salary || 'Not specified'}
+
+Description:
+${jobDescription.description}
+
+${jobDescription.requirements ? `Requirements:\n${jobDescription.requirements}` : ''}
+
+**Analysis Task:**
+Provide a comprehensive match analysis as a JSON object with this exact structure:
+{
+  "overall": 0-100,
+  "skillMatch": 0-100,
+  "experienceMatch": 0-100,
+  "seniorityMatch": 0-100,
+  "titleMatch": 0-100,
+  "industryMatch": 0-100,
+  "locationMatch": 0-100,
+  "reasoning": "2-3 sentences explaining the overall match quality",
+  "matchedSkills": ["Skills from their profile that match the job"],
+  "missingSkills": ["Required skills they don't have or need to improve"],
+  "recommendations": ["Specific advice for applying or improving candidacy"],
+  "strengths": ["Their key advantages for this role"],
+  "concerns": ["Potential weaknesses or gaps to address"]
+}
+
+**Scoring Guidelines:**
+- skillMatch: % of job's REQUIRED skills found in candidate's primary/secondary skills (weight primary 100%, secondary 75%, learning 25%)
+- experienceMatch: How years match requirement (exact match=100, ±2 years=80, ±5 years=50)
+- seniorityMatch: Does their level match the role level (exact=100, one level off=70, two+=40)
+- titleMatch: How similar is the job title to their PREFERRED job titles (100=exact match like "Security Engineer"→"Security Engineer", 80=very similar like "DLP Specialist"→"Data Loss Prevention Engineer", 60=related, 20=unrelated like "Legal"→"Engineer")
+- industryMatch: Industry alignment (100=same, 80=similar, 50=transferable, 20=different)
+- locationMatch: Does job location/type match their work preference exactly? (100=exact match, 50=acceptable compromise, 0=deal-breaker)
+- overall: Weighted average: skills(30%), experience(20%), seniority(10%), title(30%), industry(5%), location(5%)
+
+**IMPORTANT EXAMPLES:**
+- Candidate wants "Security Engineer" → Job is "Data Engineer": titleMatch=20 (completely different role despite shared "Engineer")
+- Candidate wants "Security Engineer" → Job is "Legal Attorney": titleMatch=10 (no relation at all)
+- Candidate wants "Security Engineer" → Job is "Information Security Engineer": titleMatch=100 (exact match)
+- Candidate wants "DLP Specialist" → Job is "Data Loss Prevention Engineer": titleMatch=90 (same role, different wording)
+
+**Important:**
+- Be realistic but encouraging
+- Highlight transferable skills
+- Consider career growth opportunities
+- Return ONLY valid JSON, no markdown or extra text`
+
+    const message = await anthropic.messages.create({
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 2048,
+      temperature: 0.3,
+      messages: [{
+        role: 'user',
+        content: prompt
+      }]
+    })
+
+    const content = message.content[0]
+    if (content.type !== 'text') {
+      throw new Error('Unexpected response type')
+    }
+
+    // Extract JSON from response
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      throw new Error('Failed to extract JSON from response')
+    }
+
+    const result: EnhancedFitScore = JSON.parse(jsonMatch[0])
+
+    // Validate and ensure all fields present
+    return {
+      overall: Math.min(100, Math.max(0, result.overall)),
+      skillMatch: Math.min(100, Math.max(0, result.skillMatch)),
+      experienceMatch: Math.min(100, Math.max(0, result.experienceMatch)),
+      seniorityMatch: Math.min(100, Math.max(0, result.seniorityMatch)),
+      titleMatch: Math.min(100, Math.max(0, result.titleMatch)),
+      industryMatch: Math.min(100, Math.max(0, result.industryMatch)),
+      locationMatch: Math.min(100, Math.max(0, result.locationMatch)),
+      reasoning: result.reasoning || 'Match analysis completed',
+      matchedSkills: result.matchedSkills || [],
+      missingSkills: result.missingSkills || [],
+      recommendations: result.recommendations || [],
+      strengths: result.strengths || [],
+      concerns: result.concerns || []
+    }
+
+  } catch (error) {
+    console.error('Error with AI matching:', error)
+    return fallbackMatching(userProfile, jobDescription)
+  }
+}
+
+/**
+ * Fallback matching if AI unavailable
+ */
+function fallbackMatching(
+  userProfile: EnhancedUserProfile,
+  jobDescription: JobDescription
+): EnhancedFitScore {
+  const jobText = `${jobDescription.title} ${jobDescription.description} ${jobDescription.requirements || ''}`.toLowerCase()
+
+  // Skill matching
+  const allSkills = [...userProfile.primarySkills, ...userProfile.secondarySkills, ...userProfile.learningSkills]
+  const matchedSkills = allSkills.filter(skill => jobText.includes(skill.toLowerCase()))
+  const skillMatch = allSkills.length > 0 ? Math.round((matchedSkills.length / allSkills.length) * 100) : 0
+
+  // Experience matching
+  const experienceMatch = userProfile.yearsOfExperience ? Math.min(100, userProfile.yearsOfExperience * 10) : 50
+
+  // Simple seniority matching
+  let seniorityMatch = 50
+  if (userProfile.seniorityLevel) {
+    const isSeniorRole = jobText.includes('senior') || jobText.includes('lead') || jobText.includes('principal')
+    const isSeniorCandidate = ['Senior', 'Lead', 'Principal'].includes(userProfile.seniorityLevel)
+    seniorityMatch = (isSeniorRole === isSeniorCandidate) ? 100 : 60
+  }
+
+  // Title matching - VERY strict matching for job titles
+  let titleMatch = 10 // Default very low score if no match
+  if (userProfile.jobTitles && userProfile.jobTitles.length > 0) {
+    for (const preferredTitle of userProfile.jobTitles) {
+      const titleLower = preferredTitle.toLowerCase()
+      const jobTitleLower = jobDescription.title.toLowerCase()
+
+      // Exact or very close match
+      if (jobTitleLower.includes(titleLower) || titleLower.includes(jobTitleLower)) {
+        titleMatch = 100
+        break
+      }
+
+      // Extract MEANINGFUL words (skip generic terms like "engineer", "specialist")
+      const genericWords = ['engineer', 'specialist', 'analyst', 'manager', 'developer', 'consultant', 'senior', 'junior', 'lead', 'principal']
+      const titleWords = titleLower.split(' ').filter(w => w.length > 3 && !genericWords.includes(w))
+
+      // Job must contain specific domain keywords (security, dlp, storage, etc.)
+      const matchedWords = titleWords.filter(word => jobTitleLower.includes(word))
+
+      // Only match if specific domain keywords match
+      if (matchedWords.length > 0 && matchedWords.length >= titleWords.length * 0.8) {
+        titleMatch = Math.max(titleMatch, 85)
+      } else if (matchedWords.length > 0 && matchedWords.length >= titleWords.length * 0.5) {
+        titleMatch = Math.max(titleMatch, 50)
+      } else {
+        // Check if it's a completely different role
+        const wrongRoles = ['data engineer', 'software engineer', 'devops', 'qa', 'legal', 'sales', 'marketing', 'hr', 'product manager']
+        for (const wrongRole of wrongRoles) {
+          if (jobTitleLower.includes(wrongRole)) {
+            titleMatch = Math.min(titleMatch, 15) // Cap at 15% for wrong roles
+            break
+          }
+        }
+      }
+    }
+  } else {
+    titleMatch = 50 // Neutral if no preferred titles specified
+  }
+
+  // Overall weighted - increase title importance
+  const overall = Math.round(
+    skillMatch * 0.30 +
+    experienceMatch * 0.20 +
+    seniorityMatch * 0.10 +
+    titleMatch * 0.30 + // Increased from 15% to 30%
+    50 * 0.05 + // industry
+    50 * 0.05   // location
+  )
+
+  return {
+    overall: Math.min(100, overall),
+    skillMatch,
+    experienceMatch,
+    seniorityMatch,
+    titleMatch,
+    industryMatch: 70,
+    locationMatch: 70,
+    reasoning: `Match based on ${matchedSkills.length} matching skills and ${userProfile.yearsOfExperience || 0} years of experience.`,
+    matchedSkills,
+    missingSkills: [],
+    recommendations: ['Review the job requirements carefully', 'Highlight your matching skills in your application'],
+    strengths: matchedSkills.slice(0, 3),
+    concerns: []
+  }
+}
+
+// Backward compatibility - keep old interface working
+export async function analyzeJobFit(
+  userProfile: {
+    skills: string[]
+    secondarySkills?: string[]
+    jobTitles?: string[]
+    seniorityLevel?: string | null
+    experience?: string
+  },
+  jobDescription: JobDescription
+): Promise<{ overall: number, skillMatch: number, experienceMatch: number, keywords: string[], matchedSkills: string[], missingSkills: string[], recommendations: string[] }> {
+  // Convert to enhanced profile - preserve all user data
+  const enhanced: EnhancedUserProfile = {
+    primarySkills: userProfile.skills || [],
+    secondarySkills: userProfile.secondarySkills || [],
+    learningSkills: [],
+    yearsOfExperience: parseInt(userProfile.experience || '0'),
+    seniorityLevel: userProfile.seniorityLevel || undefined,
+    jobTitles: userProfile.jobTitles || [],
+    industries: [],
+    summary: undefined,
+    workPreference: undefined,
+    salaryExpectation: undefined
+  }
+
+  const result = await analyzeJobFitEnhanced(enhanced, jobDescription)
+
+  return {
+    overall: result.overall,
+    skillMatch: result.skillMatch,
+    experienceMatch: result.experienceMatch,
+    keywords: [],
+    matchedSkills: result.matchedSkills,
+    missingSkills: result.missingSkills,
+    recommendations: result.recommendations
+  }
+}
