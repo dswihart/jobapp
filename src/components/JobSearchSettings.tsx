@@ -11,18 +11,20 @@ interface SourceConfig {
 
 interface SearchSettings {
   minFitScore: number
-  maxAgeDays: number
+  maxJobAgeDays: number
   autoScan: boolean
   scanFrequency: string
+  dailyApplicationGoal: number
 }
 
 export default function JobSearchSettings({ userId }: { userId: string }) {
   const [isOpen, setIsOpen] = useState(false)
   const [settings, setSettings] = useState<SearchSettings>({
     minFitScore: 40,
-    maxAgeDays: 7,
+    maxJobAgeDays: 7,
     autoScan: false,
-    scanFrequency: 'daily'
+    scanFrequency: 'daily',
+    dailyApplicationGoal: 6
   })
   const [sources, setSources] = useState<SourceConfig[]>([])
   const [saved, setSaved] = useState(false)
@@ -145,8 +147,8 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
                   Job Posting Age
                 </label>
                 <select
-                  value={settings.maxAgeDays}
-                  onChange={(e) => setSettings({ ...settings, maxAgeDays: parseInt(e.target.value) })}
+                  value={settings.maxJobAgeDays}
+                  onChange={(e) => setSettings({ ...settings, maxJobAgeDays: parseInt(e.target.value) })}
                   className="w-full px-3 py-2 border rounded-lg dark:bg-neutral-700 dark:border-neutral-600"
                 >
                   <option value={1}>Last 24 hours</option>
@@ -233,6 +235,24 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
                   </div>
                 )}
               </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Daily Application Goal: {settings.dailyApplicationGoal} applications/day
+                </label>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Set your target number of applications per day
+                </p>
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  step="1"
+                  value={settings.dailyApplicationGoal}
+                  onChange={(e) => setSettings({ ...settings, dailyApplicationGoal: parseInt(e.target.value) })}
+                  className="w-full"
+                />
+              </div>
+
 
               <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                 <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
@@ -240,7 +260,7 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
                 </h3>
                 <ul className="text-sm text-blue-800 dark:text-blue-400 space-y-1">
                   <li>• Minimum fit score: <strong>{settings.minFitScore}%</strong></li>
-                  <li>• Jobs from last <strong>{settings.maxAgeDays} days</strong></li>
+                  <li>• Jobs from last <strong>{settings.maxJobAgeDays} days</strong></li>
                   <li>• Active sources: <strong>{enabledSourcesCount} of {sources.length}</strong></li>
                   <li>• Auto-scan: <strong>{settings.autoScan ? `Yes (${settings.scanFrequency})` : 'No'}</strong></li>
                 </ul>

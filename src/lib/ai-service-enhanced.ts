@@ -125,7 +125,7 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 - Return ONLY valid JSON, no markdown or extra text`
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5',
       max_tokens: 2048,
       temperature: 0.3,
       messages: [{

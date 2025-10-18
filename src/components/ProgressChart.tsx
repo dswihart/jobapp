@@ -6,7 +6,7 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'APPLIED' | 'INTERVIEWING' | 'PENDING' | 'REJECTED'
+  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
@@ -29,13 +29,13 @@ interface ProgressChartProps {
 }
 
 const statusLabels = {
+  DRAFT: 'Draft',
   APPLIED: 'Applied',
   INTERVIEWING: 'Interviewing',
-  PENDING: 'Pending',
   REJECTED: 'Rejected'
 }
 
-const COLORS = ['#3B82F6', '#F59E0B', '#A855F7', '#EF4444']
+const COLORS = ['#6B7280', '#3B82F6', '#F59E0B', '#EF4444']
 
 export default function ProgressChart({ applications }: ProgressChartProps) {
   // Count applications by status
@@ -67,7 +67,11 @@ export default function ProgressChart({ applications }: ProgressChartProps) {
   return (
     <div className="space-y-6">
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="bg-gray-50 rounded-lg p-4">
+          <div className="text-2xl font-bold text-gray-600">{statusCounts.DRAFT || 0}</div>
+          <div className="text-sm text-gray-600">Draft</div>
+        </div>
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="text-2xl font-bold text-blue-600">{statusCounts.APPLIED || 0}</div>
           <div className="text-sm text-blue-600">Applied</div>
@@ -76,13 +80,9 @@ export default function ProgressChart({ applications }: ProgressChartProps) {
           <div className="text-2xl font-bold text-yellow-600">{statusCounts.INTERVIEWING || 0}</div>
           <div className="text-sm text-yellow-600">Interviewing</div>
         </div>
-        <div className="bg-green-50 rounded-lg p-4">
-          <div className="text-2xl font-bold text-green-600">{statusCounts.OFFER || 0}</div>
-          <div className="text-sm text-green-600">Offers</div>
-        </div>
-        <div className="bg-gray-50 rounded-lg p-4">
-          <div className="text-2xl font-bold text-gray-600">{totalApplications}</div>
-          <div className="text-sm text-gray-600">Total</div>
+        <div className="bg-red-50 rounded-lg p-4">
+          <div className="text-2xl font-bold text-red-600">{statusCounts.REJECTED || 0}</div>
+          <div className="text-sm text-red-600">Rejected</div>
         </div>
       </div>
 

@@ -8,10 +8,13 @@ import { analyzeJobFitEnhanced } from './ai-service'
 import { calculateRejectionPenalty } from './pattern-learning-service'
 import { getEnabledSources } from './sources'
 
+import { fetchFromUserSources } from './user-sources-fetcher'
 
 /**
- * Strict location filter - must be Remote or Barcelona/Spain
+ * DEPRECATED: Location filtering now handled by AI based on user preferences
+ * Each user can set their own location preferences in their profile
  */
+/*
 function matchesLocationRequirement(jobLocation: string | undefined): boolean {
   if (!jobLocation) return false
   
@@ -40,6 +43,7 @@ function matchesLocationRequirement(jobLocation: string | undefined): boolean {
   // Reject everything else (USA, Egypt, India, etc.)
   return false
 }
+*/
 
 const prisma = new PrismaClient()
 
@@ -96,7 +100,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
   console.log(`[Job Monitor] Settings: Min Fit Score = ${minFitScore}%, Max Age = ${maxJobAgeDays} days`)
 
   // Fetch from all enabled sources
-  const allJobs: JobPosting[] = await fetchFromAllSources(user.primarySkills || user.skills)
+  const allJobs: JobPosting[] = await fetchFromAllSources(userId, user.primarySkills || user.skills)
   console.log(`[Job Monitor] Found ${allJobs.length} total jobs from all sources`)
 
   let addedCount = 0
@@ -104,9 +108,9 @@ export async function monitorJobBoards(userId: string): Promise<number> {
   for (const job of allJobs) {
     try {
       // Check if job is blocked (previously rejected)
-      const blocked = await prisma.$queryRaw<Array<{ user_id: string }>>`
-        SELECT user_id FROM blocked_jobs
-        WHERE user_id = ${userId} AND job_url = ${job.jobUrl}
+      const blocked = await prisma.$queryRaw<Array<{ "userId": string }>>`
+        SELECT "userId" FROM blocked_jobs
+        WHERE "userId" = ${userId} AND "jobUrl" = ${job.jobUrl}
         LIMIT 1
       `
       
@@ -115,16 +119,33 @@ export async function monitorJobBoards(userId: string): Promise<number> {
         continue
       }
 
+      // Check for existing job by URL or by title+company combination
       const existing = await prisma.jobOpportunity.findFirst({
         where: {
-          jobUrl: job.jobUrl,
-          userId
+          userId,
+          OR: [
+            { jobUrl: job.jobUrl },
+            {
+              AND: [
+                { title: job.title },
+                { company: job.company }
+              ]
+            }
+          ]
         }
       })
-
       if (existing) {
-        console.log(`[Job Monitor] Skipping duplicate job: ${job.title}`)
+        console.log(`[Job Monitor] Skipping duplicate job: ${job.title} (archived: ${existing.isArchived})`)
         continue
+      }
+
+      // Check job age
+      if (job.postedDate) {
+        const jobAgeInDays = Math.floor((Date.now() - new Date(job.postedDate).getTime()) / (1000 * 60 * 60 * 24))
+        if (jobAgeInDays > maxJobAgeDays) {
+          console.log(`[Job Monitor] Skipping old job: ${job.title} (posted ${jobAgeInDays} days ago, max: ${maxJobAgeDays} days)`)
+          continue
+        }
       }
 
       // Build enhanced user profile for better AI matching
@@ -162,15 +183,8 @@ export async function monitorJobBoards(userId: string): Promise<number> {
 
 
       // Apply learned rejection patterns penalty
-      const rejectionPenalty = await calculateRejectionPenalty(userId, {
-        id: job.jobUrl, // Use URL as temp ID
-        title: job.title,
-        company: job.company,
-        description: job.description,
-        location: job.location,
-        source: job.source || 'Unknown',
-        fitScore: fitScore.overall
-      })
+      // DISABLED temporarily until rejection_patterns table is created
+      const rejectionPenalty = 0
 
       const adjustedScore = Math.max(0, fitScore.overall - rejectionPenalty)
 
@@ -213,13 +227,22 @@ export async function monitorJobBoards(userId: string): Promise<number> {
   console.log(`[Job Monitor] Scan complete. Added ${addedCount} new jobs.`)
   return addedCount
 }
-
-async function fetchFromAllSources(skills: string[]): Promise<JobPosting[]> {
-  const enabledSources = getEnabledSources()
-  console.log(`[Job Aggregator] Scanning ${enabledSources.length} enabled sources...`)
-
+async function fetchFromAllSources(userId: string, skills: string[]): Promise<JobPosting[]> {
   const allJobs: JobPosting[] = []
   const sourceCounts: Record<string, number> = {}
+
+  // Fetch from user-configured sources
+  try {
+    const userJobs = await fetchFromUserSources(userId, skills)
+    console.log(`[Job Aggregator] Found ${userJobs.length} jobs from user sources`)
+    allJobs.push(...userJobs)
+  } catch (error) {
+    console.error('[Job Aggregator] Error fetching user sources:', error)
+  }
+
+  // Fetch from hardcoded sources
+  const enabledSources = getEnabledSources()
+  console.log(`[Job Aggregator] Scanning ${enabledSources.length} enabled sources...`)
 
   for (const source of enabledSources) {
     try {

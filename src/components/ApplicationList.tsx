@@ -8,7 +8,7 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'APPLIED' | 'INTERVIEWING' | 'PENDING' | 'REJECTED'
+  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
@@ -36,16 +36,16 @@ interface ApplicationListProps {
 }
 
 const statusColors = {
+  DRAFT: 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200',
   APPLIED: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
   INTERVIEWING: 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200',
-  PENDING: 'bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200',
   REJECTED: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200'
 }
 
 const statusLabels = {
+  DRAFT: 'Draft',
   APPLIED: 'Applied',
   INTERVIEWING: 'Interviewing',
-  PENDING: 'Pending',
   REJECTED: 'Rejected'
 }
 
@@ -108,11 +108,12 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
     <>
       <div className="overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="grid grid-cols-7 gap-4 text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <div className="hidden md:grid md:grid-cols-8 gap-4 text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             <div>Company</div>
             <div>Role</div>
             <div>Status</div>
             <div>Applied Date</div>
+            <div>Created</div>
             <div>Contacts</div>
             <div>Actions</div>
             <div></div>
@@ -121,7 +122,42 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
         <div className="divide-y divide-gray-200 dark:divide-gray-700">
           {applications.map((application) => (
             <div key={application.id} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-              <div className="grid grid-cols-7 gap-4 items-center">
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-3 border-b border-gray-200 dark:border-gray-700 pb-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-bold text-gray-900 dark:text-white text-lg">{application.company}</div>
+                    <div className="text-gray-700 dark:text-gray-300">{application.role}</div>
+                  </div>
+                  <select
+                    value={application.status}
+                    onChange={(e) => onStatusUpdate(application.id, e.target.value as Application['status'])}
+                    className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[application.status]} border-0`}
+                  >
+                    {Object.entries(statusLabels).map(([value, label]) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                  <div>📅 Applied: {application.appliedDate ? formatDate(application.appliedDate) : 'Not set'}</div>
+                  <div>🗓️ Created: {formatDate(application.createdAt)}</div>
+                  <div>👥 Contacts: {application.contacts.length}</div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => onEdit(application)} className="flex-1 min-w-[100px] px-3 py-2 bg-blue-600 text-white rounded-lg text-sm">
+                    Edit
+                  </button>
+                  <button onClick={() => handleAddContact(application.id)} className="flex-1 min-w-[120px] px-3 py-2 bg-green-600 text-white rounded-lg text-sm">
+                    Add Contact
+                  </button>
+                  <button onClick={() => onDelete(application.id)} className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm">
+                    Delete
+                  </button>
+                </div>
+              </div>
+
+              <div className="hidden md:grid md:grid-cols-8 gap-4 items-center">
                 <div className="font-medium text-gray-900 dark:text-white">{application.company}</div>
                 <div className="text-gray-900 dark:text-gray-100">{application.role}</div>
                 <div>
@@ -139,6 +175,9 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                 </div>
                 <div className="text-gray-500 dark:text-gray-400">
                   {application.appliedDate ? formatDate(application.appliedDate) : 'Not set'}
+                </div>
+                <div className="text-gray-500 dark:text-gray-400 text-sm">
+                  {formatDate(application.createdAt)}
                 </div>
                 <div className="text-gray-500 dark:text-gray-400">
                   {application.contacts.length} contact{application.contacts.length !== 1 ? 's' : ''}

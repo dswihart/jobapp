@@ -6,7 +6,7 @@ const prisma = new PrismaClient()
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userId, opportunityId } = body
+    const { userId, opportunityId, status = 'APPLIED' } = body
 
     if (!userId || !opportunityId) {
       return NextResponse.json(
@@ -45,14 +45,16 @@ export async function POST(request: NextRequest) {
         company: opportunity.company,
         role: opportunity.title,
         jobUrl: opportunity.jobUrl,
-        status: 'APPLIED',
-        appliedDate: new Date(),
-        notes: `Applied via Job Tracker. Source: ${opportunity.source}. Fit Score: ${opportunity.fitScore}%`,
+        status: status,
+        appliedDate: status === 'APPLIED' ? new Date() : null,
+        notes: status === 'APPLIED' 
+          ? `Applied via Job Tracker. Source: ${opportunity.source}. Fit Score: ${opportunity.fitScore}%`
+          : `Draft from Job Tracker. Source: ${opportunity.source}. Fit Score: ${opportunity.fitScore}%`,
         userId
       }
     })
 
-    console.log(`[Applications API] Created application for ${opportunity.title} at ${opportunity.company}`)
+    console.log(`[Applications API] Created ${status} application for ${opportunity.title} at ${opportunity.company}`)
 
     return NextResponse.json({
       success: true,

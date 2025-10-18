@@ -40,14 +40,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { company, role, status, notes, jobUrl, appliedDate } = body
 
+    // Automatically set appliedDate when status is APPLIED
+    let finalAppliedDate = appliedDate ? new Date(appliedDate) : null
+    const finalStatus = status || 'APPLIED'
+    if (finalStatus === 'APPLIED' && !appliedDate) {
+      finalAppliedDate = new Date()
+    }
+
     const application = await prisma.application.create({
       data: {
         company,
         role,
-        status: status || 'APPLIED',
+        status: finalStatus,
         notes,
         jobUrl,
-        appliedDate: appliedDate ? new Date(appliedDate) : null,
+        appliedDate: finalAppliedDate,
         userId: session.user.id
       },
       include: {

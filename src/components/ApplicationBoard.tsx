@@ -7,7 +7,7 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'APPLIED' | 'INTERVIEWING' | 'PENDING' | 'REJECTED'
+  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
@@ -33,9 +33,9 @@ interface ApplicationBoardProps {
 }
 
 const columns = [
+  { id: 'DRAFT', title: 'Draft', color: 'bg-gray-50 dark:bg-gray-950 border-gray-200 dark:border-gray-800' },
   { id: 'APPLIED', title: 'Applied', color: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800' },
   { id: 'INTERVIEWING', title: 'Interviewing', color: 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800' },
-  { id: 'PENDING', title: 'Pending', color: 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800' },
   { id: 'REJECTED', title: 'Rejected', color: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800' }
 ] as const
 
@@ -73,7 +73,7 @@ export default function ApplicationBoard({ applications, onEdit, onDelete, onSta
 
   return (
     <div className="p-6">
-      <div className="grid grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {columns.map((column) => {
           const columnApplications = getApplicationsByStatus(column.id as Application['status'])
           

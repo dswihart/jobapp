@@ -113,7 +113,7 @@ Return the JSON now:`
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5',
       max_tokens: 4096,
       temperature: 0,
       messages: [{
@@ -219,7 +219,7 @@ Return ONLY valid JSON:`
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5',
       max_tokens: 2048,
       temperature: 0.3,
       messages: [{

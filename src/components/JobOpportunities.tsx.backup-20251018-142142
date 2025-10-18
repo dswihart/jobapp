@@ -11,7 +11,6 @@ interface JobOpportunity {
   salary?: string
   jobUrl: string
   source: string
-  sourceUrl?: string
   fitScore: number
   postedDate: string
   isRead: boolean
@@ -23,21 +22,11 @@ interface JobOpportunitiesProps {
   onApplicationCreated?: () => void
 }
 
-// Helper function to extract domain from URL
-const extractDomain = (url: string): string => {
-  try {
-    const urlObj = new URL(url)
-    return urlObj.hostname.replace('www.', '')
-  } catch {
-    return url
-  }
-}
-
-export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
+export default function JobOpportunities({ userId, onApplicationCreated }: JobOpportunitiesProps) {
   const [jobs, setJobs] = useState<JobOpportunity[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
-  const [minFitScore, setMinFitScore] = useState(40)
+  const [minFitScore, setMinFitScore] = useState(0)
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set())
   const [applyingJob, setApplyingJob] = useState<string | null>(null)
 
@@ -97,10 +86,15 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
       if (data.success) {
         setAppliedJobs(prev => new Set([...prev, job.jobUrl]))
         // Show success message or notification
+        // Remove job from opportunities list
+        setJobs(prev => prev.filter(j => j.id !== job.id))
+        onApplicationCreated?.()
         console.log('Application created successfully')
       } else if (response.status === 409) {
         // Already applied
         setAppliedJobs(prev => new Set([...prev, job.jobUrl]))
+        setJobs(prev => prev.filter(j => j.id !== job.id))
+        onApplicationCreated?.()
       } else {
         console.error('Failed to create application:', data.error)
         alert('Failed to create application: ' + data.error)
@@ -110,13 +104,69 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
       alert('Error creating application')
     } finally {
       setApplyingJob(null)
+
+    }
+  }
+  const handleMoveToDraft = async (job: JobOpportunity) => {
+    try {
+      const response = await fetch('/api/applications/create-from-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          opportunityId: job.id,
+          status: 'DRAFT'
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Archive the job opportunity so it doesn't reappear on refresh
+        await fetch(`/api/opportunities/${job.id}`, {
+          method: 'DELETE'
+        })
+        
+        // Remove job from opportunities list
+        setJobs(prev => prev.filter(j => j.id !== job.id))
+        console.log('Draft application created successfully')
+        onApplicationCreated?.()
+      } else if (response.status === 409) {
+        // Already exists - archive and remove from list
+        await fetch(`/api/opportunities/${job.id}`, {
+          method: 'DELETE'
+        })
+        setJobs(prev => prev.filter(j => j.id !== job.id))
+        alert('An application already exists for this job')
+        onApplicationCreated?.()
+      } else {
+        console.error('Failed to create draft:', data.error)
+        alert('Failed to create draft: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error creating draft:', error)
+      alert('Error creating draft')
     }
   }
 
-  const filteredJobs = jobs
-    .filter(job => filter === 'all' || !job.isRead)
-    .filter(job => job.fitScore >= minFitScore)
-    .sort((a, b) => b.fitScore - a.fitScore)
+  const handleDelete = async (jobId: string) => {
+    try {
+      const response = await fetch(`/api/opportunities/${jobId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        // Update jobs list without reloading - maintains scroll position
+        setJobs(prev => prev.filter(job => job.id !== jobId))
+      } else {
+        console.error('Failed to delete opportunity')
+        alert('Failed to delete opportunity')
+      }
+    } catch (error) {
+      console.error('Error deleting opportunity:', error)
+      alert('Error deleting opportunity')
+    }
+  }
 
   const getFitScoreColor = (score: number) => {
     if (score >= 70) return 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/20'
@@ -126,6 +176,16 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
 
   const isApplied = (jobUrl: string) => appliedJobs.has(jobUrl)
 
+
+  // Apply filters to jobs
+  const filteredJobs = jobs
+    .filter(job => filter === 'all' || !job.isRead)
+    .filter(job => job.fitScore >= minFitScore)
+    .sort((a, b) => b.fitScore - a.fitScore)
+
+  // Calculate counts for filter buttons
+  const allJobsCount = jobs.filter(job => job.fitScore >= minFitScore).length
+  const unreadJobsCount = jobs.filter(job => !job.isRead && job.fitScore >= minFitScore).length
   return (
     <div className="bg-white dark:bg-neutral-800 rounded-lg shadow">
       {/* Header */}
@@ -159,7 +219,7 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
                   : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-gray-300'
               }`}
             >
-              All ({jobs.length})
+              All ({allJobsCount})
             </button>
             <button
               onClick={() => setFilter('unread')}
@@ -169,7 +229,7 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
                   : 'bg-gray-100 dark:bg-neutral-700 text-gray-700 dark:text-gray-300'
               }`}
             >
-              New ({jobs.filter(j => !j.isRead).length})
+              New ({unreadJobsCount})
             </button>
           </div>
 
@@ -191,6 +251,9 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
         </div>
       </div>
 
+        <div className="text-sm text-gray-600 dark:text-gray-400 px-4 py-2">
+          Showing {filteredJobs.length} of {jobs.length} jobs
+        </div>
       {/* Job List */}
       <div className="divide-y divide-gray-200 dark:divide-neutral-700">
         {loading ? (
@@ -237,20 +300,10 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
                           {job.title}
                         </h3>
                         <p className="text-gray-600 dark:text-gray-400 text-sm">
-                          {job.company} • {job.sourceUrl ? (
-                          <a 
-                            href={job.sourceUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-blue-600 dark:text-blue-400 hover:underline"
-                            title={job.sourceUrl}
-                          >
-                            {job.source} ({extractDomain(job.sourceUrl)})
-                          </a>
-                        ) : job.source}
+                          {job.company} • {job.source}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {applied ? (
                           <div className="px-4 py-2 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg flex items-center gap-2 text-sm">
                             <CheckCircleIcon className="h-4 w-4" />
@@ -265,6 +318,13 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
                             {applying ? 'Adding...' : 'Apply'}
                           </button>
                         )}
+                        <button
+                          onClick={() => handleMoveToDraft(job)}
+                          className="flex-shrink-0 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
+                          title="Move to draft applications"
+                        >
+                          📝 Draft
+                        </button>
                         <a
                           href={job.jobUrl}
                           target="_blank"
@@ -274,6 +334,13 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
                           View Job
                           <ArrowTopRightOnSquareIcon className="h-4 w-4" />
                         </a>
+                        <button
+                          onClick={() => handleDelete(job.id)}
+                          className="flex-shrink-0 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                          title="Delete this opportunity"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </div>
 

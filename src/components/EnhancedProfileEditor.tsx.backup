@@ -1,14 +1,12 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { XMarkIcon, UserCircleIcon, BriefcaseIcon, CogIcon, DocumentArrowUpIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, UserCircleIcon, BriefcaseIcon, CogIcon, DocumentArrowUpIcon } from '@heroicons/react/24/outline'
 import CVUpload from './CVUpload'
-import ResumeManager from './ResumeManager'
 
 interface EnhancedProfile {
   name?: string
   email?: string
   location?: string
-  preferredCountries: string[]
   summary?: string
   primarySkills: string[]
   secondarySkills: string[]
@@ -38,7 +36,7 @@ interface Props {
   onClose: () => void
 }
 
-type TabType = 'cv' | 'basic' | 'experience' | 'preferences' | 'resumes'
+type TabType = 'cv' | 'basic' | 'experience' | 'preferences'
 
 export default function EnhancedProfileEditor({ userId, onClose }: Props) {
   const [profile, setProfile] = useState<EnhancedProfile>({
@@ -48,7 +46,6 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
     workHistory: [],
     education: [],
     jobTitles: [],
-    preferredCountries: [],
     industries: []
   })
   const [loading, setLoading] = useState(true)
@@ -117,8 +114,7 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
     { id: 'cv' as TabType, name: 'Upload CV', icon: DocumentArrowUpIcon },
     { id: 'basic' as TabType, name: 'Basic Info', icon: UserCircleIcon },
     { id: 'experience' as TabType, name: 'Experience', icon: BriefcaseIcon },
-    { id: 'preferences' as TabType, name: 'Preferences', icon: CogIcon },
-    { id: 'resumes' as TabType, name: 'Resumes', icon: DocumentTextIcon },
+    { id: 'preferences' as TabType, name: 'Preferences', icon: CogIcon }
   ]
 
   if (loading) {
@@ -138,10 +134,10 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
       ></div>
 
       {/* Modal - Full screen on mobile, centered on desktop */}
-      <div className="fixed inset-0 sm:inset-4 sm:m-auto sm:max-w-4xl sm:w-full sm:h-fit sm:max-h-[90vh] bg-white dark:bg-gray-800 sm:rounded-lg shadow-xl flex flex-col">
+      <div className="absolute inset-0 sm:inset-auto sm:top-1/2 sm:left-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-4xl sm:w-full sm:max-h-[90vh] bg-white dark:bg-gray-800 sm:rounded-lg shadow-xl flex flex-col">
 
         {/* Header - sticky */}
-        <div className="flex-shrink-0 sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 flex items-center justify-between z-20">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
             Enhanced Profile
           </h2>
@@ -154,8 +150,8 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
         </div>
 
         {/* Tabs - horizontal scroll on mobile */}
-        <div className="flex-shrink-0 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 z-10">
-          <nav className="-mb-px flex overflow-x-auto scrollbar-hide px-4 sm:px-6">
+        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-[4.5rem] sm:top-[4rem] z-10">
+          <nav className="-mb-px flex overflow-x-auto scrollbar-hide px-2 sm:px-6">
             {tabs.map(tab => {
               const Icon = tab.icon
               return (
@@ -177,18 +173,18 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
         </div>
 
         {/* Content - scrollable */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6">
 
           {/* CV Upload Tab */}
           {activeTab === 'cv' && (
-            <div>
+            <div className="space-y-4">
               <CVUpload userId={userId} onProfileExtracted={loadProfile} />
             </div>
           )}
 
           {/* Basic Info Tab */}
           {activeTab === 'basic' && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -349,7 +345,7 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
 
           {/* Preferences Tab */}
           {activeTab === 'preferences' && (
-            <div className="space-y-6">
+            <div className="space-y-4 sm:space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -366,74 +362,6 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
                     <option value="On-site">On-site</option>
                   </select>
                 </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Location
-                  </label>
-                  <input
-                    type="text"
-                    value={profile.location || ''}
-                    onChange={e => setProfile({ ...profile, location: e.target.value })}
-                    placeholder="e.g., Barcelona, Spain or Remote"
-                    className="w-full px-3 py-2.5 text-base border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Your preferred work location or Remote for remote-only positions
-                  </p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    Preferred Countries/Locations
-                  </label>
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="Add location - press Enter"
-                        className="flex-1 px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter') {
-                            const input = e.target as HTMLInputElement
-                            const value = input.value.trim()
-                            if (value && !profile.preferredCountries.includes(value)) {
-                              setProfile({
-                                ...profile,
-                                preferredCountries: [...profile.preferredCountries, value]
-                              })
-                              input.value = ''
-                            }
-                          }
-                        }}
-                      />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {profile.preferredCountries.map((country) => (
-                        <span
-                          key={country}
-                          className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full text-sm"
-                        >
-                          {country}
-                          <button
-                            onClick={() =>
-                              setProfile({
-                                ...profile,
-                                preferredCountries: profile.preferredCountries.filter(c => c !== country)
-                              })
-                            }
-                            className="hover:text-blue-900 dark:hover:text-blue-100"
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Add multiple preferred locations for job searching
-                  </p>
-                </div>
-
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -467,16 +395,10 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
               </div>
             </div>
           )}
-          {/* Resumes Tab */}
-          {activeTab === 'resumes' && (
-            <div className="space-y-6">
-              <ResumeManager />
-            </div>
-          )}
         </div>
 
-        {/* Footer */}
-        <div className="flex-shrink-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 flex flex-col-reverse sm:flex-row justify-end gap-3">
+        {/* Footer - sticky */}
+        <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-4 flex flex-col-reverse sm:flex-row justify-end gap-3">
           <button
             onClick={onClose}
             className="w-full sm:w-auto px-4 sm:px-5 py-2.5 text-sm sm:text-base font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"

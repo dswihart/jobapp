@@ -7,7 +7,7 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'APPLIED' | 'INTERVIEWING' | 'PENDING' | 'REJECTED'
+  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
@@ -33,9 +33,9 @@ interface ApplicationModalProps {
 }
 
 const statusOptions = [
+  { value: 'DRAFT', label: 'Draft' },
   { value: 'APPLIED', label: 'Applied' },
   { value: 'INTERVIEWING', label: 'Interviewing' },
-  { value: 'PENDING', label: 'Pending' },
   { value: 'REJECTED', label: 'Rejected' }
 ]
 
@@ -43,7 +43,7 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
   const [formData, setFormData] = useState({
     company: '',
     role: '',
-    status: 'APPLIED' as Application['status'],
+    status: 'DRAFT' as Application['status'],
     notes: '',
     jobUrl: '',
     appliedDate: ''
@@ -63,7 +63,7 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
       setFormData({
         company: '',
         role: '',
-        status: 'APPLIED',
+        status: 'DRAFT',
         notes: '',
         jobUrl: '',
         appliedDate: ''

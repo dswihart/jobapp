@@ -3,7 +3,7 @@ import { DocumentTextIcon } from '@heroicons/react/24/outline'
 
 import { useState, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
-import { PlusIcon, ChartBarIcon, ViewColumnsIcon, ListBulletIcon, ArrowRightOnRectangleIcon, LinkIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ChartBarIcon, ViewColumnsIcon, ListBulletIcon, ArrowRightOnRectangleIcon, LinkIcon } from '@heroicons/react/24/outline'
 import ApplicationList from './ApplicationList'
 import ApplicationBoard from './ApplicationBoard'
 import ProgressChart from './ProgressChart'
@@ -12,8 +12,7 @@ import EnhancedProfileEditor from './EnhancedProfileEditor'
 import ThemeToggle from './ThemeToggle'
 import AlertsPanel from './AlertsPanel'
 import JobSearchSettings from './JobSearchSettings'
-import JobSourcesManager from './JobSourcesManager'
-import ResumeManager from './ResumeManager'
+import SourceManager from './SourceManager'
 import JobMonitor from './JobMonitor'
 
 import JobOpportunities from './JobOpportunities'
@@ -23,7 +22,7 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
+  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'PENDING' | 'REJECTED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
@@ -48,51 +47,7 @@ interface User {
   skills: string[]
   experience?: string
   resumeUrl?: string
-  dailyApplicationGoal?: number
 }
-
-// Array of motivational messages that rotate daily
-const motivationalMessages = [
-  "Keep up the momentum!",
-  "Every application brings you closer to your dream job!",
-  "You're doing great! Stay consistent!",
-  "Your persistence will pay off!",
-  "Today is a new opportunity!",
-  "Believe in yourself and your journey!",
-  "Small steps lead to big achievements!",
-  "Stay positive and keep pushing forward!",
-  "Your next opportunity is just around the corner!",
-  "Success is the sum of small efforts repeated daily!",
-  "Don't stop until you're proud!",
-  "Great things take time - keep going!",
-  "You're one application closer to success!",
-  "Stay focused on your goals!",
-  "Your dedication is inspiring!",
-  "Every no brings you closer to a yes!",
-  "Progress, not perfection!",
-  "Keep your head up and keep moving forward!",
-  "You've got this!",
-  "Consistency is key to success!",
-  "Your future self will thank you!",
-  "Make today count!",
-  "Dream big, work hard, stay focused!",
-  "You're building your future, one application at a time!",
-  "Keep pushing - opportunities are coming!",
-  "Your hard work will be rewarded!",
-  "Stay committed to your goals!",
-  "Never give up on your dreams!",
-  "You're making excellent progress!",
-  "Keep going - you're unstoppable!"
-];
-
-// Function to get day of year (for rotating messages)
-const getDayOfYear = () => {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const diff = now.getTime() - start.getTime();
-  const oneDay = 1000 * 60 * 60 * 24;
-  return Math.floor(diff / oneDay);
-};
 
 export default function Dashboard() {
   const [applications, setApplications] = useState<Application[]>([])
@@ -103,58 +58,11 @@ export default function Dashboard() {
   const [editingApplication, setEditingApplication] = useState<Application | null>(null)
   const [loading, setLoading] = useState(true)
   const [isParsingUrl, setIsParsingUrl] = useState(false)
-  const [todayApplicationsCount, setTodayApplicationsCount] = useState(0)
-  const [dailyMessage, setDailyMessage] = useState('')
-  const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; goalMet: boolean }>>([])
 
   useEffect(() => {
-    // Set daily motivational message based on day of year
-    const dayOfYear = getDayOfYear();
-    const messageIndex = dayOfYear % motivationalMessages.length;
-    setDailyMessage(motivationalMessages[messageIndex]);
-
     fetchApplications()
     fetchUser()
   }, [])
-
-  useEffect(() => {
-    // Calculate today's applications count
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    const count = applications.filter(app => {
-      if (!app.appliedDate) return false
-      const appliedDate = new Date(app.appliedDate)
-      appliedDate.setHours(0, 0, 0, 0)
-      return appliedDate.getTime() === today.getTime()
-    }).length
-
-    setTodayApplicationsCount(count)
-
-    // Calculate past 7 days goals (using user's daily goal or default to 6)
-    const dailyGoal = user?.dailyApplicationGoal || 6
-    const goalData = []
-    for (let i = 1; i <= 7; i++) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      date.setHours(0, 0, 0, 0)
-
-      const dayCount = applications.filter(app => {
-        if (!app.appliedDate) return false
-        const appliedDate = new Date(app.appliedDate)
-        appliedDate.setHours(0, 0, 0, 0)
-        return appliedDate.getTime() === date.getTime()
-      }).length
-
-      goalData.push({
-        date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-        count: dayCount,
-        goalMet: dayCount >= dailyGoal
-      })
-    }
-
-    setPastDaysGoals(goalData.reverse())
-  }, [applications, user])
 
   const fetchApplications = async () => {
     try {
@@ -354,69 +262,10 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Today&apos;s Applications Banner */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="bg-white dark:bg-gray-800 rounded-full p-3">
-                <ChartBarIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-white">Today&apos;s Applications</h2>
-                <p className="text-sm text-blue-100">{dailyMessage}</p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-4xl font-bold text-white">{todayApplicationsCount}</div>
-              <p className="text-sm text-blue-100">
-                {todayApplicationsCount === 1 ? 'application' : 'applications'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Past 7 Days Goals Tracker */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Past 7 Days Goal Tracker ({user?.dailyApplicationGoal || 6} applications/day)</h3>
-          <div className="grid grid-cols-7 gap-2">
-            {pastDaysGoals.map((day, index) => (
-              <div key={index} className="flex flex-col items-center">
-                <div className={`w-full p-3 rounded-lg ${day.goalMet ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}>
-                  {day.goalMet ? (
-                    <CheckCircleIcon className="h-8 w-8 text-green-600 dark:text-green-400 mx-auto" />
-                  ) : (
-                    <XCircleIcon className="h-8 w-8 text-red-600 dark:text-red-400 mx-auto" />
-                  )}
-                  <div className="text-center mt-2">
-                    <div className={`text-lg font-bold ${day.goalMet ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                      {day.count}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      {day.date}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <CollapsibleSection title="Job Sources" defaultExpanded={true} className="mb-8">
-          <JobSourcesManager userId={user?.id || ""} />
-        </CollapsibleSection>
+        <CollapsibleSection title="Job Sources" defaultExpanded={false} className="mb-8"><SourceManager /></CollapsibleSection>
 
-        <CollapsibleSection title="My Resumes" defaultExpanded={true} className="mb-8">
-          <ResumeManager />
-        </CollapsibleSection>
-
-<CollapsibleSection title="Job Opportunities" defaultExpanded={true} className="mb-8">
-          <JobOpportunities userId={user?.id || ""} onApplicationCreated={fetchApplications} />
-        </CollapsibleSection>
+<CollapsibleSection title="Job Opportunities" defaultExpanded={false} className="mb-8"><JobOpportunities userId={user?.id || ""} /></CollapsibleSection>
 
         <div className="mb-8">
           <ApplicationsByDateChart userId={user?.id} />

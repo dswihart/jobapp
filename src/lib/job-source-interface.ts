@@ -13,6 +13,7 @@ export interface JobPosting {
   jobUrl: string
   postedDate?: Date
   source: string
+  sourceUrl?: string  // URL of the job board or RSS feed
 }
 
 export interface JobSourceConfig {

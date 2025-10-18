@@ -2,6 +2,63 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateCoverLetter } from '@/lib/cover-letter-service'
 import { auth } from '@/lib/auth'
+import * as cheerio from 'cheerio'
+
+async function fetchJobDescription(url: string): Promise<string> {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const html = await response.text()
+    const $ = cheerio.load(html)
+    
+    // Remove script and style tags
+    $('script').remove()
+    $('style').remove()
+    
+    // Try to extract job description from common selectors
+    const selectors = [
+      '.job-description',
+      '#job-description', 
+      '[class*="description"]',
+      '[id*="description"]',
+      'article',
+      'main',
+      '.content',
+      'body'
+    ]
+    
+    let description = ''
+    for (const selector of selectors) {
+      const element = $(selector)
+      if (element.length > 0) {
+        description = element.text().trim()
+        if (description.length > 100) {
+          break
+        }
+      }
+    }
+    
+    // Clean up the description
+    description = description
+      .replace(/\s+/g, ' ')
+      .replace(/\n+/g, '\n')
+      .trim()
+      .substring(0, 5000) // Limit to 5000 characters
+    
+    return description || 'Job description not available'
+  } catch (error) {
+    console.error('Error fetching job description:', error)
+    return 'Job description could not be fetched'
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,8 +104,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Use notes as job description, or a default if not available
-    const jobDescription = notes || `Position: ${role} at ${company}${jobUrl ? ` - ${jobUrl}` : ''}`
+    // Get job description: use notes if available, otherwise fetch from URL
+    let jobDescription = notes
+    
+    if (!jobDescription && jobUrl) {
+      console.log(`Fetching job description from URL: ${jobUrl}`)
+      jobDescription = await fetchJobDescription(jobUrl)
+    }
+    
+    if (!jobDescription) {
+      jobDescription = `Position: ${role} at ${company}`
+    }
 
     // Generate cover letter
     const coverLetter = await generateCoverLetter({

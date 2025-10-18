@@ -61,6 +61,12 @@ export async function PUT(
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
 
+    // Automatically set appliedDate when status changes to APPLIED
+    let finalAppliedDate = appliedDate ? new Date(appliedDate) : null
+    if (status === 'APPLIED' && !appliedDate) {
+      finalAppliedDate = new Date()
+    }
+
     const application = await prisma.application.update({
       where: { id },
       data: {
@@ -69,7 +75,7 @@ export async function PUT(
         status,
         notes,
         jobUrl,
-        appliedDate: appliedDate ? new Date(appliedDate) : null
+        appliedDate: finalAppliedDate
       },
       include: {
         contacts: true

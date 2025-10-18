@@ -11,38 +11,40 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String?
-  name      String?
-  skills    String[]
+  id         String   @id @default(cuid())
+  email      String   @unique
+  password   String?
+  name       String?
+  skills     String[]
   experience String?
-  resumeUrl String?
+  resumeUrl  String?
 
   // Enhanced profile fields
-  summary          String?   @db.Text
-  location         String?
+  summary           String? @db.Text
+  location          String?
+  preferredCountries String[]  @default([])
   salaryExpectation String?
-  workPreference   String?
-  availability     String?
+  workPreference    String?
+  availability      String?
 
   yearsOfExperience Int?
-  seniorityLevel   String?
+  seniorityLevel    String?
 
   // Job search preferences
-  minFitScore      Int?     @default(40)
-  maxJobAgeDays    Int?     @default(7)
-  autoScan         Boolean? @default(false)
-  scanFrequency    String?  @default("daily")
+  minFitScore          Int?     @default(40)
+  maxJobAgeDays        Int?     @default(7)
+  autoScan             Boolean? @default(false)
+  scanFrequency        String?  @default("daily")
+  dailyApplicationGoal Int?     @default(6)
 
-  education        String[]  @default([])
-  primarySkills    String[]  @default([])
-  secondarySkills  String[]  @default([])
-  learningSkills   String[]  @default([])
+  education       String[] @default([])
+  primarySkills   String[] @default([])
+  secondarySkills String[] @default([])
+  learningSkills  String[] @default([])
 
-  jobTitles        String[]  @default([])
-  industries       String[]  @default([])
-  excludeKeywords  String[]  @default([])
+  jobTitles       String[] @default([])
+  industries      String[] @default([])
+  excludeKeywords String[] @default([])
 
   workHistory      Json?
   extractedProfile Json?
@@ -51,27 +53,33 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  applications Application[]
+  applications  Application[]
+  resumes       Resume[]
   opportunities JobOpportunity[]
-  alerts       Alert[]
-  contacts     Contact[]
+  alerts        Alert[]
+  blockedJobs   BlockedJob[]
+  contacts      Contact[]
+  jobSources    UserJobSource[]
 
   @@map("users")
 }
 
 model Application {
-  id          String      @id @default(cuid())
+  id          String            @id @default(cuid())
   company     String
   role        String
-  status      ApplicationStatus @default(APPLIED)
+  status      ApplicationStatus @default(DRAFT)
   notes       String?
   jobUrl      String?
   appliedDate DateTime?
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  resumeId String?
+  resume   Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
 
   contacts Contact[]
 
@@ -97,29 +105,32 @@ model Contact {
 }
 
 enum ApplicationStatus {
+  DRAFT
   APPLIED
   INTERVIEWING
-  PENDING
   REJECTED
 }
+
 model JobOpportunity {
-  id          String   @id @default(cuid())
-  title       String
-  company     String
-  description String   @db.Text
-  requirements String? @db.Text
-  location    String?
-  salary      String?
-  jobUrl      String   @unique
-  source      String   // e.g., "LinkedIn", "Indeed", "Custom"
-  postedDate  DateTime?
-  scrapedAt   DateTime @default(now())
-  isRead      Boolean  @default(false)
-  isArchived  Boolean  @default(false)
-  fitScore    Float?
+  id           String    @id @default(cuid())
+  title        String
+  company      String
+  description  String    @db.Text
+  requirements String?   @db.Text
+  location     String?
+  salary       String?
+  jobUrl       String    @unique
+  source       String // e.g., "LinkedIn", "Indeed", "Custom"
+  sourceUrl    String? // URL of the job board or RSS feed
+  postedDate   DateTime?
+  scrapedAt    DateTime  @default(now())
+  isRead       Boolean   @default(false)
+  isArchived   Boolean   @default(false)
+  deletedAt    DateTime?
+  fitScore     Float?
   userFeedback String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -130,11 +141,11 @@ model JobOpportunity {
 }
 
 model Alert {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   message   String
   type      AlertType @default(NEW_JOB)
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
+  isRead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -149,4 +160,75 @@ enum AlertType {
   NEW_JOB
   APPLICATION_UPDATE
   REMINDER
+}
+
+model Resume {
+  id          String  @id @default(cuid())
+  name        String // e.g., Software Engineer Resume, Security Resume
+  fileName    String // Original filename
+  fileUrl     String // URL to stored resume file
+  fileType    String // e.g., application/pdf
+  fileSize    Int // File size in bytes
+  isPrimary   Boolean @default(false)
+  description String? @db.Text // Optional notes about this resume
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  applications Application[]
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("resumes")
+}
+
+model BlockedJob {
+  id        String   @id @default(cuid())
+  jobUrl    String
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, jobUrl])
+  @@map("blocked_jobs")
+}
+
+model UserJobSource {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  // Source types: "rss", "web_scrape", "api", "job_board"
+  sourceType String
+
+  // Configuration based on source type
+  feedUrl        String? // For RSS feeds
+  scrapeUrl      String? // For web scraping
+  scrapeSelector String? // CSS selector for job listings container
+  apiEndpoint    String? // API endpoint URL
+  apiKey         String? // API key if needed
+  apiHeaders     Json? // Custom headers for API requests
+
+  // Filtering and parsing config
+  titleSelector       String? // CSS selector for job title
+  companySelector     String? // CSS selector for company name
+  locationSelector    String? // CSS selector for location
+  linkSelector        String? // CSS selector for job link
+  descriptionSelector String? // CSS selector for job description
+
+  // Advanced options
+  enabled          Boolean  @default(true)
+  isBuiltIn        Boolean  @default(false)
+  rateLimitPerHour Int?     @default(100)
+  searchKeywords   String[] @default([]) // Keywords to search for
+  excludeKeywords  String[] @default([]) // Keywords to exclude
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_job_sources")
 }

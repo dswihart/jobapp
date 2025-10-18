@@ -1,24 +1,24 @@
 #!/bin/bash
 
 # Automated Job Scanning Script
-API_URL="http://localhost:3000/api/monitor"
+API_URL="http://localhost:3000/api/cron/scan-jobs"
 LOG_FILE="/var/log/job-tracker-cron.log"
-USER_ID="default-user-id"
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting automated job scan..." >> "$LOG_FILE"
+# Load environment variables
+source /opt/job-tracker/.env
 
-RESPONSE=$(curl -s -X POST "$API_URL" \
-  -H "Content-Type: application/json" \
-  -d "{\"userId\":\"$USER_ID\"}" \
-  2>&1)
+echo "[2025-10-18 12:17:04] Starting automated job scan for all users..." >> "$LOG_FILE"
 
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Response: $RESPONSE" >> "$LOG_FILE"
+RESPONSE=$(curl -s -X POST "$API_URL"   -H "Content-Type: application/json"   -H "x-cron-secret: $CRON_SECRET"   2>&1)
 
-if echo "$RESPONSE" | grep -q "\"success\":true"; then
-  COUNT=$(echo "$RESPONSE" | grep -oP '"count":\K[0-9]+' || echo "0")
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✓ Scan complete. Found $COUNT new jobs." >> "$LOG_FILE"
+echo "[2025-10-18 12:17:04] Response: $RESPONSE" >> "$LOG_FILE"
+
+if echo "$RESPONSE" | grep -q '"success":true'; then
+  TOTAL=$(echo "$RESPONSE" | grep -oP '"totalJobsFound":\K[0-9]+' || echo "0")
+  USERS=$(echo "$RESPONSE" | grep -oP '"Scanned \K[0-9]+' || echo "0")
+  echo "[2025-10-18 12:17:04] ✓ Scan complete. Scanned $USERS users, found $TOTAL new jobs." >> "$LOG_FILE"
 else
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✗ Scan failed." >> "$LOG_FILE"
+  echo "[2025-10-18 12:17:04] ✗ Scan failed." >> "$LOG_FILE"
 fi
 
 echo "" >> "$LOG_FILE"

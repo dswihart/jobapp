@@ -21,7 +21,8 @@ export async function GET(request: NextRequest) {
         minFitScore: true,
         maxJobAgeDays: true,
         autoScan: true,
-        scanFrequency: true
+        scanFrequency: true,
+        dailyApplicationGoal: true
       }
     })
 
@@ -38,7 +39,8 @@ export async function GET(request: NextRequest) {
         minFitScore: user.minFitScore ?? 40,
         maxJobAgeDays: user.maxJobAgeDays ?? 7,
         autoScan: user.autoScan ?? false,
-        scanFrequency: user.scanFrequency ?? 'daily'
+        scanFrequency: user.scanFrequency ?? 'daily',
+        dailyApplicationGoal: user.dailyApplicationGoal ?? 6
       }
     })
   } catch (error) {
@@ -68,7 +70,8 @@ export async function POST(request: NextRequest) {
         minFitScore: settings.minFitScore,
         maxJobAgeDays: settings.maxJobAgeDays,
         autoScan: settings.autoScan,
-        scanFrequency: settings.scanFrequency
+        scanFrequency: settings.scanFrequency,
+        dailyApplicationGoal: settings.dailyApplicationGoal
       }
     })
 
@@ -81,7 +84,8 @@ export async function POST(request: NextRequest) {
         minFitScore: updatedUser.minFitScore ?? 40,
         maxJobAgeDays: updatedUser.maxJobAgeDays ?? 7,
         autoScan: updatedUser.autoScan ?? false,
-        scanFrequency: updatedUser.scanFrequency ?? 'daily'
+        scanFrequency: updatedUser.scanFrequency ?? 'daily',
+        dailyApplicationGoal: updatedUser.dailyApplicationGoal ?? 6
       }
     })
   } catch (error) {

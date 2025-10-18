@@ -10,8 +10,10 @@ export async function DELETE(
   try {
     const { id } = await context.params
 
-    await prisma.jobOpportunity.delete({
-      where: { id }
+    // Soft delete by setting isArchived to true
+    await prisma.jobOpportunity.update({
+      where: { id },
+      data: { isArchived: true }
     })
 
     return NextResponse.json({ success: true })

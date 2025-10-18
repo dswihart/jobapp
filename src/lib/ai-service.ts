@@ -136,9 +136,12 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 - seniorityMatch: Does their level match the role level (exact=100, one level off=70, two+=40)
 - titleMatch: How similar is the job title to their PREFERRED job titles (100=exact match like "Security Engineer"→"Security Engineer", 80=very similar like "DLP Specialist"→"Data Loss Prevention Engineer", 60=related, 20=unrelated like "Legal"→"Engineer")
 - industryMatch: Industry alignment (100=same, 80=similar, 50=transferable, 20=different)
-- locationMatch: STRICT LOCATION MATCHING
-  * 100: Remote or Barcelona or Spain
-  * 0: Any other location (USA, Egypt, India, etc.) - AUTOMATIC DISQUALIFICATION
+- locationMatch: LOCATION MATCHING BASED ON USER PREFERENCES
+  * 100: Exact match with user's location preference or Remote (if user accepts remote)
+  * 80: Nearby location or same country
+  * 50: Same region but different country
+  * 20: Different region but job offers relocation
+  * 0: Completely mismatched location (e.g., user in Spain, job in USA with no remote option)
 - overall: Weighted average: skills(30%), experience(20%), seniority(10%), title(30%), industry(5%), location(5%)
 
 **IMPORTANT EXAMPLES:**
@@ -154,7 +157,7 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 - Return ONLY valid JSON, no markdown or extra text`
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5',
       max_tokens: 2048,
       temperature: 0.3,
       messages: [{
