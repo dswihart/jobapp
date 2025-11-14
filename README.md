@@ -155,3 +155,17 @@ src/
 ## License
 
 MIT License - see LICENSE file for details
+## Documentation
+
+📖 **[Complete Application Documentation](./docs/JOB_TRACKER_DOCUMENTATION.md)**
+
+For comprehensive technical documentation including:
+- Complete architecture and deployment details
+- Full database schema documentation
+- All API endpoints with examples
+- AI integration and job matching system
+- Component structure and code organization
+- Maintenance and troubleshooting guides
+
+See the [docs/](./docs/) directory for additional guides and documentation.
+

@@ -33,7 +33,7 @@ model User {
   // Job search preferences
   minFitScore          Int?     @default(40)
   maxJobAgeDays        Int?     @default(7)
-  autoScan             Boolean? @default(false)
+  autoScan             Boolean? @default(true)
   scanFrequency        String?  @default("daily")
   dailyApplicationGoal Int?     @default(6)
 
@@ -55,10 +55,12 @@ model User {
 
   applications  Application[]
   resumes       Resume[]
+  coverLetters  CoverLetter[]
   opportunities JobOpportunity[]
   alerts        Alert[]
   blockedJobs   BlockedJob[]
   contacts      Contact[]
+  followUps     FollowUp[]
   jobSources    UserJobSource[]
 
   @@map("users")
@@ -72,6 +74,12 @@ model Application {
   notes       String?
   jobUrl      String?
   appliedDate DateTime?
+  interviewDate DateTime? @map("interview_date")
+  interviewTime String? @map("interview_time") // Store time separately for easier formatting
+  interviewType String? @map("interview_type") // phone, video, in-person, etc.
+  interviewRound Int? @default(1) @map("interview_round") // Track which round of interviews
+  interviewNotes String? @map("interview_notes") @db.Text
+
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
@@ -81,7 +89,11 @@ model Application {
   resumeId String?
   resume   Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
 
+  coverLetterId String? @map("cover_letter_id")
+  coverLetter   CoverLetter? @relation(fields: [coverLetterId], references: [id], onDelete: SetNull)
+
   contacts Contact[]
+  followUps FollowUp[]
 
   @@map("applications")
 }
@@ -101,14 +113,17 @@ model Contact {
   applicationId String?
   application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
+  followUps FollowUp[]
   @@map("contacts")
 }
 
 enum ApplicationStatus {
   DRAFT
+  PENDING
   APPLIED
   INTERVIEWING
   REJECTED
+  ARCHIVED
 }
 
 model JobOpportunity {
@@ -180,6 +195,61 @@ model Resume {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("resumes")
+}
+
+
+model CoverLetter {
+  @@map("cover_letters")
+  id          String  @id @default(cuid())
+  name        String // e.g., Cover Letter for Software Engineer at Company
+  fileName    String @map("file_name") // Original filename
+  fileUrl     String @map("file_url") // URL to stored cover letter file
+  fileType    String @map("file_type") // e.g., application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  fileSize    Int @map("file_size") // File size in bytes
+  description String? @db.Text // Optional notes about this cover letter
+  content     String? @db.Text // The actual cover letter text content
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  applications Application[]
+
+}
+
+
+model FollowUp {
+  id          String   @id @default(cuid())
+  title       String   // e.g., "Thank interviewer", "Check application status"
+  description String?  @db.Text // Additional details about the follow-up
+  dueDate     DateTime @map("due_date") // When the follow-up is due
+  completed   Boolean  @default(false)
+  completedAt DateTime? @map("completed_at")
+  priority    String   @default("medium") // low, medium, high
+  type        String   @default("general") // interview, application, networking, general
+  
+  // Notification settings
+  notifyBefore Int      @default(24) @map("notify_before") // Hours before due date to notify
+  notified     Boolean  @default(false)
+  notifiedAt   DateTime? @map("notified_at")
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  applicationId String? @map("application_id")
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  contactId String? @map("contact_id")
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@map("follow_ups")
+  @@index([userId, dueDate])
+  @@index([userId, completed])
 }
 
 model BlockedJob {

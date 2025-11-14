@@ -40,6 +40,59 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Build comprehensive notes with all job details
+    const notesContent = []
+
+    // Add status header
+    if (status === 'APPLIED') {
+      notesContent.push(`✓ Applied via Job Tracker`)
+    } else {
+      notesContent.push(`📝 Draft from Job Tracker`)
+    }
+
+    // Add source and fit score
+    notesContent.push(`Source: ${opportunity.source}`)
+    if (opportunity.fitScore) {
+      notesContent.push(`Fit Score: ${opportunity.fitScore}%`)
+    }
+    notesContent.push('') // Empty line
+
+    // Add job description
+    if (opportunity.description) {
+      notesContent.push('JOB DESCRIPTION:')
+      notesContent.push(opportunity.description)
+      notesContent.push('') // Empty line
+    }
+
+    // Add requirements
+    if (opportunity.requirements) {
+      notesContent.push('REQUIREMENTS:')
+      notesContent.push(opportunity.requirements)
+      notesContent.push('') // Empty line
+    }
+
+    // Add location if available
+    if (opportunity.location) {
+      notesContent.push(`📍 Location: ${opportunity.location}`)
+    }
+
+    // Add salary if available
+    if (opportunity.salary) {
+      notesContent.push(`💰 Salary: ${opportunity.salary}`)
+    }
+
+    // Add job URL
+    if (opportunity.jobUrl) {
+      notesContent.push(`🔗 Job URL: ${opportunity.jobUrl}`)
+    }
+
+    // Add posted date if available
+    if (opportunity.postedDate) {
+      notesContent.push(`📅 Posted: ${new Date(opportunity.postedDate).toLocaleDateString()}`)
+    }
+
+    const notes = notesContent.join('\n')
+
     const application = await prisma.application.create({
       data: {
         company: opportunity.company,
@@ -47,9 +100,7 @@ export async function POST(request: NextRequest) {
         jobUrl: opportunity.jobUrl,
         status: status,
         appliedDate: status === 'APPLIED' ? new Date() : null,
-        notes: status === 'APPLIED' 
-          ? `Applied via Job Tracker. Source: ${opportunity.source}. Fit Score: ${opportunity.fitScore}%`
-          : `Draft from Job Tracker. Source: ${opportunity.source}. Fit Score: ${opportunity.fitScore}%`,
+        notes: notes,
         userId
       }
     })

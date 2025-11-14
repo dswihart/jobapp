@@ -39,6 +39,7 @@ export async function GET(request: Request) {
 
       jobTitles: user.jobTitles || [],
       industries: user.industries || [],
+      preferredCountries: user.preferredCountries || [],
 
       salaryExpectation: user.salaryExpectation,
       workPreference: user.workPreference,
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
 
         jobTitles: profile.jobTitles,
         industries: profile.industries,
+        preferredCountries: profile.preferredCountries,
 
         salaryExpectation: profile.salaryExpectation,
         workPreference: profile.workPreference,

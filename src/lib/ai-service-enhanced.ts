@@ -110,18 +110,31 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 }
 
 **Scoring Guidelines:**
-- skillMatch: % of required skills the candidate has (primary=100%, secondary=75%, learning=25%)
-- experienceMatch: How years match requirement (exact match=100, ±2 years=80, ±5 years=50)
-- seniorityMatch: Does their level match the role level (exact=100, one level off=70, two+=40)
-- titleMatch: How similar are their past titles to this role (100=perfect, 70=related, 40=transferable)
-- industryMatch: Industry alignment (100=same, 80=similar, 50=transferable, 20=different)
-- locationMatch: Location preference vs job location (100=match, 50=possible, 0=mismatch)
-- overall: Weighted average: skills(35%), experience(25%), seniority(15%), title(15%), industry(5%), location(5%)
+- skillMatch: Match required skills considering transferable abilities (primary skills=100%, secondary=80%, learning=40%, related skills=60%)
+- experienceMatch: Years of experience fit (within range=100, ±3 years=80, ±7 years=60, any relevant experience=40)
+- seniorityMatch: Level alignment, considering growth opportunities (exact=100, one level off=85, growth role=70)
+- titleMatch: Past titles vs this role (exact=100, related field=80, transferable=60, growth opportunity=50)
+- industryMatch: Industry alignment (same=100, adjacent=85, transferable=70, new but relevant skills=50)
+- locationMatch: Location compatibility (preferred location=100, remote=100, acceptable location=80, relocatable=60)
+- overall: Balanced formula emphasizing fit and growth potential
 
-**Important:**
-- Be realistic but encouraging
-- Highlight transferable skills
-- Consider career growth opportunities
+**Overall Score Calculation:**
+Use this weighted formula but be generous with transferable skills and growth potential:
+- Skills & Experience: 50% (emphasize transferable skills, related technologies, and learning ability)
+- Role Fit: 30% (title similarity, seniority match, considering career growth)
+- Location & Industry: 20% (location compatibility, industry transferability)
+
+**Important Matching Philosophy:**
+- Be encouraging and recognize transferable skills (e.g., "software security" → "cloud security")
+- Value adjacent experience and learning potential
+- Consider career growth opportunities (junior → mid, mid → senior transitions)
+- Tech skills are often transferable (AWS → Azure, React → Vue, etc.)
+- Give credit for demonstrated learning ability and secondary skills
+- Remote jobs should score high for location match
+- Barcelona/Spain locations should score high for European candidates
+- Don't penalize for exact title mismatches if skills align
+- Focus on "can they do the job?" not "do they have exact keywords?"
+
 - Return ONLY valid JSON, no markdown or extra text`
 
     const message = await anthropic.messages.create({

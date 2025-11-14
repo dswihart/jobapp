@@ -41,6 +41,7 @@ interface EnhancedUserProfile {
   industries?: string[]
   summary?: string
   workPreference?: string
+  preferredCountries?: string[]
   salaryExpectation?: string
 }
 
@@ -81,9 +82,13 @@ export async function analyzeJobFitEnhanced(
 
 **CRITICAL MATCHING RULES:**
 1. The candidate's job titles MUST align with the role (e.g., "Security Engineer" should NOT match "Data Engineer" or "Legal" roles)
-2. Primary skills are the candidate's CORE expertise - these MUST be required or highly relevant for a strong match
+   - If job is in DIFFERENT domain than candidate preferred titles → titleMatch ≤25, overall ≤30
 3. If the job title/role is completely different from the candidate's preferred titles, the match should be LOW (<40%)
-4. Consider the candidate's work preference for location matching
+4. **LOCATION IS CRITICAL - STRICT ENFORCEMENT**:
+   - Candidate requires: "Remote or Hybrid in Barcelona, Spain"
+   - If job location is USA, Egypt, India, Asia, etc. → locationMatch=0, overall must be ≤30
+   - ONLY accept: Remote, Barcelona, Spain, or Europe Remote
+   - Any violation = immediate disqualification
 
 **Candidate Profile:**
 - Primary Skills (Core Expertise): ${userProfile.primarySkills.join(', ')}
@@ -95,6 +100,7 @@ export async function analyzeJobFitEnhanced(
 - **Preferred Job Titles (MUST MATCH)**: ${userProfile.jobTitles?.join(', ') || 'Any'}
 - Target Industries: ${userProfile.industries?.join(', ') || 'Any'}
 - **Work Preference (LOCATION CONSTRAINT)**: ${userProfile.workPreference || 'Not specified'}
+- **Preferred Countries/Locations (LOCATION FILTER)**: ${userProfile.preferredCountries?.join(", ") || "Any"}
 - Professional Summary: ${userProfile.summary || 'Not provided'}
 
 **Job Posting:**
@@ -132,7 +138,13 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 - seniorityMatch: Does their level match the role level (exact=100, one level off=70, two+=40)
 - titleMatch: How similar is the job title to their PREFERRED job titles (100=exact match like "Security Engineer"→"Security Engineer", 80=very similar like "DLP Specialist"→"Data Loss Prevention Engineer", 60=related, 20=unrelated like "Legal"→"Engineer")
 - industryMatch: Industry alignment (100=same, 80=similar, 50=transferable, 20=different)
-- locationMatch: Does job location/type match their work preference exactly? (100=exact match, 50=acceptable compromise, 0=deal-breaker)
+- locationMatch: LOCATION MATCHING BASED ON USER PREFERENCES
+  * Use the "Preferred Countries/Locations" field to determine location compatibility
+  * 100: Job location is in user's preferredCountries list OR job is Remote/Worldwide (and user accepts remote)
+  * 80: Job is in same region as one of user's preferredCountries
+  * 50: Job offers relocation to one of user's preferredCountries
+  * 20: Job is outside preferredCountries but offers remote work
+  * 0: Job location is completely incompatible with user's preferredCountries and workPreference
 - overall: Weighted average: skills(30%), experience(20%), seniority(10%), title(30%), industry(5%), location(5%)
 
 **IMPORTANT EXAMPLES:**
@@ -148,7 +160,7 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 - Return ONLY valid JSON, no markdown or extra text`
 
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5',
       max_tokens: 2048,
       temperature: 0.3,
       messages: [{

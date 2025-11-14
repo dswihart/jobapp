@@ -41,6 +41,7 @@ interface EnhancedUserProfile {
   industries?: string[]
   summary?: string
   workPreference?: string
+  preferredCountries?: string[]
   salaryExpectation?: string
 }
 
@@ -99,6 +100,7 @@ export async function analyzeJobFitEnhanced(
 - **Preferred Job Titles (MUST MATCH)**: ${userProfile.jobTitles?.join(', ') || 'Any'}
 - Target Industries: ${userProfile.industries?.join(', ') || 'Any'}
 - **Work Preference (LOCATION CONSTRAINT)**: ${userProfile.workPreference || 'Not specified'}
+- **Preferred Countries/Locations (LOCATION FILTER)**: ${userProfile.preferredCountries?.join(", ") || "Any"}
 - Professional Summary: ${userProfile.summary || 'Not provided'}
 
 **Job Posting:**
@@ -131,24 +133,34 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 }
 
 **Scoring Guidelines:**
-- skillMatch: % of job's REQUIRED skills found in candidate's primary/secondary skills (weight primary 100%, secondary 75%, learning 25%)
-- experienceMatch: How years match requirement (exact match=100, ±2 years=80, ±5 years=50)
-- seniorityMatch: Does their level match the role level (exact=100, one level off=70, two+=40)
-- titleMatch: How similar is the job title to their PREFERRED job titles (100=exact match like "Security Engineer"→"Security Engineer", 80=very similar like "DLP Specialist"→"Data Loss Prevention Engineer", 60=related, 20=unrelated like "Legal"→"Engineer")
-- industryMatch: Industry alignment (100=same, 80=similar, 50=transferable, 20=different)
-- locationMatch: LOCATION MATCHING BASED ON USER PREFERENCES
-  * 100: Exact match with user's location preference or Remote (if user accepts remote)
-  * 80: Nearby location or same country
-  * 50: Same region but different country
-  * 20: Different region but job offers relocation
-  * 0: Completely mismatched location (e.g., user in Spain, job in USA with no remote option)
-- overall: Weighted average: skills(30%), experience(20%), seniority(10%), title(30%), industry(5%), location(5%)
+- skillMatch: Match required skills with flexibility for transferable abilities (primary=100%, secondary=80%, learning=50%, related/adjacent=70%)
+- experienceMatch: Years of experience match (within range=100, ±3 years=85, ±7 years=65, any relevant=45)
+- seniorityMatch: Level match with growth consideration (exact=100, one off=85, growth opportunity=75)
+- titleMatch: Job title relevance to candidate's background (exact=100, related field=85, adjacent=70, transferable=55, growth=50)
+- industryMatch: Industry compatibility (same=100, adjacent=85, transferable=70, new field with relevant skills=55)
+- locationMatch: Location compatibility based on preferences
+  * 100: Remote/Worldwide OR matches preferredCountries (Barcelona/Spain for European candidates)
+  * 85: Same region as preferredCountries
+  * 70: Offers relocation to preferredCountries
+  * 50: Remote option available
+  * 30: Different location but role is exceptional fit
+- overall: Balanced scoring emphasizing potential and transferability
 
-**IMPORTANT EXAMPLES:**
-- Candidate wants "Security Engineer" → Job is "Data Engineer": titleMatch=20 (completely different role despite shared "Engineer")
-- Candidate wants "Security Engineer" → Job is "Legal Attorney": titleMatch=10 (no relation at all)
-- Candidate wants "Security Engineer" → Job is "Information Security Engineer": titleMatch=100 (exact match)
-- Candidate wants "DLP Specialist" → Job is "Data Loss Prevention Engineer": titleMatch=90 (same role, different wording)
+**Overall Formula - Emphasize Skills & Growth:**
+- Core Capabilities: 55% (skills 40% + experience 15%) - focus on what they can do
+- Role Alignment: 30% (title 20% + seniority 10%) - consider transferable experience
+- Context Fit: 15% (location 10% + industry 5%) - be flexible on context
+
+**Matching Philosophy - Be Encouraging:**
+- Recognize transferable skills (security→cloud security, backend→fullstack, etc.)
+- Value learning trajectory and secondary skills heavily
+- Consider career growth and stretch opportunities (mid→senior roles)
+- Tech skills are highly transferable (AWS↔Azure, React↔Vue, Python↔Go)
+- Don't penalize for keyword mismatches if core skills align
+- Remote jobs = high location score for everyone
+- Barcelona/Spain = high score for European candidates
+- Focus on "Can they succeed?" not "Perfect keyword match?"
+- If someone has 70%+ of core skills, that's a strong match even without exact title
 
 **Important:**
 - Be realistic but encouraging

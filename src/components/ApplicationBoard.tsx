@@ -7,13 +7,15 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
+  status: 'DRAFT' | 'PENDING' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED' | 'ARCHIVED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
   createdAt: string
   updatedAt: string
   contacts: Contact[]
+  resume?: { id: string; name: string; fileUrl: string; fileName: string } | null
+  coverLetter?: { id: string; name: string; fileUrl: string; fileName: string } | null
 }
 
 interface Contact {
@@ -34,9 +36,11 @@ interface ApplicationBoardProps {
 
 const columns = [
   { id: 'DRAFT', title: 'Draft', color: 'bg-gray-50 dark:bg-gray-950 border-gray-200 dark:border-gray-800' },
+  { id: 'PENDING', title: 'Pending', color: 'bg-purple-50 dark:bg-purple-950 border-purple-200 dark:border-purple-800' },
   { id: 'APPLIED', title: 'Applied', color: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800' },
   { id: 'INTERVIEWING', title: 'Interviewing', color: 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800' },
-  { id: 'REJECTED', title: 'Rejected', color: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800' }
+  { id: 'REJECTED', title: 'Rejected', color: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800' },
+  { id: 'ARCHIVED', title: 'Archived', color: 'bg-gray-50 dark:bg-gray-950 border-gray-200 dark:border-gray-800' }
 ] as const
 
 export default function ApplicationBoard({ applications, onEdit, onDelete, onStatusUpdate }: ApplicationBoardProps) {
@@ -128,6 +132,17 @@ export default function ApplicationBoard({ applications, onEdit, onDelete, onSta
                     {application.contacts.length > 0 && (
                       <div className="text-xs text-gray-500 mb-2">
                         {application.contacts.length} contact{application.contacts.length !== 1 ? 's' : ''}
+                      </div>
+                    )}
+                    
+                    {application.resume && (
+                      <div className="text-xs text-gray-500 mb-2">
+                        📄 Resume: <a href={application.resume.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{application.resume.name}</a>
+                      </div>
+                    )}
+                    {application.coverLetter && (
+                      <div className="text-xs text-gray-600">
+                        📧 Cover Letter: <a href={application.coverLetter.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{application.coverLetter.name}</a>
                       </div>
                     )}
                     

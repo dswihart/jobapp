@@ -116,7 +116,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "ID required" }, { status: 400 })
     }
 
-    // Verify ownership and not built-in
+    // Verify ownership
     const source = await prisma.userJobSource.findUnique({
       where: { id }
     })
@@ -125,13 +125,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    if (source.isBuiltIn) {
-      return NextResponse.json(
-        { error: "Cannot delete built-in sources" },
-        { status: 403 }
-      )
-    }
-
+    // Delete the source (ALL sources are now deletable)
     await prisma.userJobSource.delete({
       where: { id }
     })
@@ -145,3 +139,4 @@ export async function DELETE(request: NextRequest) {
     )
   }
 }
+

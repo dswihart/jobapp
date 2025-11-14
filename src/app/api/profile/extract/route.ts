@@ -15,41 +15,63 @@ export async function POST(request: Request) {
     // Extract profile using AI
     const extracted = await extractProfileFromResume(resumeText)
 
-    // Update user profile in database
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        name: extracted.name,
-        email: extracted.email || undefined,
-        resumeUrl: resumeUrl || undefined,
+    // Check if user exists
+    const existingUser = await prisma.user.findUnique({
+      where: { id: userId }
+    })
 
-        // Basic fields (keep for backward compatibility)
-        skills: [...extracted.primarySkills, ...extracted.secondarySkills],
-        experience: extracted.yearsOfExperience ? `${extracted.yearsOfExperience} years` : undefined,
+    // Prepare user data
+    const userData = {
+      name: extracted.name,
+      email: extracted.email || undefined,
+      resumeUrl: resumeUrl || undefined,
 
-        // Enhanced fields
-        summary: extracted.summary,
-        location: extracted.location,
-        salaryExpectation: extracted.salaryExpectation,
-        workPreference: extracted.workPreference,
-        availability: extracted.availability,
+      // Basic fields (keep for backward compatibility)
+      skills: [...extracted.primarySkills, ...extracted.secondarySkills],
+      experience: extracted.yearsOfExperience ? `${extracted.yearsOfExperience} years` : undefined,
 
-        yearsOfExperience: extracted.yearsOfExperience,
-        seniorityLevel: extracted.seniorityLevel,
+      // Enhanced fields
+      summary: extracted.summary,
+      location: extracted.location,
+      salaryExpectation: extracted.salaryExpectation,
+      workPreference: extracted.workPreference,
+      availability: extracted.availability,
 
-        education: extracted.education.map(e => `${e.degree} from ${e.institution}${e.year ? ` (${e.year})` : ''}`),
+      yearsOfExperience: extracted.yearsOfExperience,
+      seniorityLevel: extracted.seniorityLevel,
 
-        primarySkills: extracted.primarySkills,
-        secondarySkills: extracted.secondarySkills,
-        learningSkills: extracted.learningSkills,
+      education: extracted.education.map(e => `${e.degree} from ${e.institution}${e.year ? ` (${e.year})` : ''}`),
 
-        jobTitles: extracted.jobTitles,
-        industries: extracted.industries,
+      primarySkills: extracted.primarySkills,
+      secondarySkills: extracted.secondarySkills,
+      learningSkills: extracted.learningSkills,
 
-        workHistory: extracted.workHistory as unknown as import("@prisma/client").Prisma.InputJsonValue, // Prisma Json type
-        extractedProfile: extracted as unknown as import("@prisma/client").Prisma.InputJsonValue,
-        lastExtracted: new Date()
+      jobTitles: extracted.jobTitles,
+      industries: extracted.industries,
+
+      workHistory: extracted.workHistory as unknown as import("@prisma/client").Prisma.InputJsonValue,
+      extractedProfile: extracted as unknown as import("@prisma/client").Prisma.InputJsonValue,
+      lastExtracted: new Date()
+    }
+
+    // For new users, check if email is already taken by another user
+    let createData = { id: userId, ...userData }
+    if (!existingUser && userData.email) {
+      const emailTaken = await prisma.user.findUnique({
+        where: { email: userData.email }
+      })
+      // If email is taken by another user, don't include it in create
+      if (emailTaken) {
+        const { email, ...dataWithoutEmail } = createData
+        createData = dataWithoutEmail
       }
+    }
+
+    // Upsert user profile in database (create if doesn't exist, update if exists)
+    await prisma.user.upsert({
+      where: { id: userId },
+      create: createData,
+      update: userData
     })
 
     return NextResponse.json({

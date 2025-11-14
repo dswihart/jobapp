@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { analyzeJobFitEnhanced } from "@/lib/ai-service"
+import { prisma } from "@/lib/prisma"
 import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic({
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
       max_tokens: 2000,
       messages: [{
         role: 'user',
-        content: `You are a job posting parser. Extract structured information from this HTML page.
+        content: `You are an expert job posting parser. Be aggressive in finding job information. Extract structured information from this HTML page.
 
 HTML Content:
 ${html.substring(0, 50000)}
@@ -106,9 +108,14 @@ If information is not found, use null for that field. Be concise and accurate.`
     // Parse the AI response
     let parsedData
     try {
-      const text = content.text.trim()
+      let text = content.text.trim()
       // Remove markdown code blocks if present
-      const jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      let jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      // Extract JSON object if embedded in text
+      const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        jsonText = jsonMatch[0]
+      }
       parsedData = JSON.parse(jsonText)
     } catch (parseError) {
       console.error('Failed to parse AI response:', content.text)
@@ -118,8 +125,48 @@ If information is not found, use null for that field. Be concise and accurate.`
       )
     }
 
+    // Calculate fit score for the parsed job
+    let fitScore = null
+    try {
+      // Get user profile (using default user for now)
+      const user = await prisma.user.findUnique({
+        where: { id: 'default-user-id' }
+      })
+
+      if (user && parsedData.role) {
+        const enhancedProfile = {
+          primarySkills: (user.primarySkills || user.skills) as string[],
+          secondarySkills: (user.secondarySkills || []) as string[],
+          learningSkills: (user.learningSkills || []) as string[],
+          yearsOfExperience: user.yearsOfExperience || parseInt(user.experience?.replace(/\D/g, '') || '0'),
+          seniorityLevel: user.seniorityLevel || undefined,
+          desiredRoles: user.desiredRoles as string[],
+          desiredLocations: user.desiredLocations as string[],
+          remotePreference: user.remotePreference || undefined,
+          salaryExpectation: user.salaryExpectation || undefined
+        }
+
+        const jobFit = await analyzeJobFitEnhanced(
+          enhancedProfile,
+          {
+            title: parsedData.role || '',
+            company: parsedData.company || '',
+            description: parsedData.description || '',
+            requirements: parsedData.requirements || '',
+            location: parsedData.location || '',
+            salary: parsedData.salary || undefined
+          }
+        )
+        fitScore = jobFit
+        console.log(`[Parse Job URL] Fit score for ${parsedData.role} at ${parsedData.company}: ${jobFit.overall}%`)
+      }
+    } catch (error) {
+      console.error('[Parse Job URL] Error calculating fit score:', error)
+    }
+
     return NextResponse.json({
       success: true,
+      fitScore,
       data: {
         company: parsedData.company || '',
         role: parsedData.role || '',

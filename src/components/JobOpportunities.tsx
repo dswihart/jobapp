@@ -33,11 +33,11 @@ const extractDomain = (url: string): string => {
   }
 }
 
-export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
+export default function JobOpportunities({ userId, onApplicationCreated }: JobOpportunitiesProps) {
   const [jobs, setJobs] = useState<JobOpportunity[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
-  const [minFitScore, setMinFitScore] = useState(40)
+  const [minFitScore, setMinFitScore] = useState(0)
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set())
   const [applyingJob, setApplyingJob] = useState<string | null>(null)
 
@@ -113,6 +113,103 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
     }
   }
 
+  const handleMoveToDraft = async (job: JobOpportunity) => {
+    try {
+      const response = await fetch('/api/applications/create-from-job', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          opportunityId: job.id,
+          status: 'DRAFT'
+        })
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        // Archive the job opportunity so it doesn't reappear on refresh
+        await fetch(`/api/opportunities/${job.id}`, {
+          method: 'DELETE'
+        })
+        
+        // Remove job from opportunities list
+        setJobs(prev => prev.filter(j => j.id !== job.id))
+        console.log('Draft application created successfully')
+        onApplicationCreated?.()
+      } else if (response.status === 409) {
+        // Already exists - archive and remove from list
+        await fetch(`/api/opportunities/${job.id}`, {
+          method: 'DELETE'
+        })
+        setJobs(prev => prev.filter(j => j.id !== job.id))
+        alert('An application already exists for this job')
+        onApplicationCreated?.()
+      } else {
+        console.error('Failed to create draft:', data.error)
+        alert('Failed to create draft: ' + data.error)
+      }
+    } catch (error) {
+      console.error('Error creating draft:', error)
+      alert('Error creating draft')
+    }
+  }
+
+  const handleDelete = async (jobId: string) => {
+    try {
+      const response = await fetch(`/api/opportunities/${jobId}`, {
+        method: 'DELETE'
+      })
+
+      if (response.ok) {
+        // Update jobs list without reloading - maintains scroll position
+        setJobs(prev => prev.filter(job => job.id !== jobId))
+      } else {
+        console.error('Failed to delete opportunity')
+        alert('Failed to delete opportunity')
+      }
+    } catch (error) {
+      console.error('Error deleting opportunity:', error)
+      alert('Error deleting opportunity')
+    }
+  }
+
+
+  const markAsRead = async (jobId: string) => {
+    try {
+      await fetch(`/api/opportunities/${jobId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isRead: true })
+      })
+      // Update local state
+      setJobs(prev => prev.map(job => 
+        job.id === jobId ? { ...job, isRead: true } : job
+      ))
+    } catch (error) {
+      console.error('Error marking job as read:', error)
+    }
+  }
+
+  const markAllVisibleAsRead = async () => {
+    const unreadJobs = filteredJobs.filter(job => !job.isRead)
+    for (const job of unreadJobs) {
+      markAsRead(job.id)
+    }
+  }
+
+  // Mark jobs as read when they're displayed
+  useEffect(() => {
+    if (!loading && jobs.length > 0) {
+      // Mark visible unread jobs as read after a short delay
+      const timer = setTimeout(() => {
+        const unreadJobs = jobs.filter(job => !job.isRead).slice(0, 5) // Mark first 5
+        unreadJobs.forEach(job => markAsRead(job.id))
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [jobs.length, loading])
+
   const filteredJobs = jobs
     .filter(job => filter === 'all' || !job.isRead)
     .filter(job => job.fitScore >= minFitScore)
@@ -140,17 +237,25 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
               AI-matched opportunities based on your profile
             </p>
           </div>
-          <button
-            onClick={loadJobs}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-          >
-            Refresh
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={markAllVisibleAsRead}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+            >
+              Mark All Read
+            </button>
+            <button
+              onClick={loadJobs}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
         <div className="flex gap-4 items-center">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilter('all')}
               className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
@@ -180,7 +285,7 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
             </label>
             <input
               type="range"
-              min="30"
+              min="0"
               max="90"
               step="5"
               value={minFitScore}
@@ -250,7 +355,7 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
                         ) : job.source}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {applied ? (
                           <div className="px-4 py-2 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg flex items-center gap-2 text-sm">
                             <CheckCircleIcon className="h-4 w-4" />
@@ -265,6 +370,13 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
                             {applying ? 'Adding...' : 'Apply'}
                           </button>
                         )}
+                        <button
+                          onClick={() => handleMoveToDraft(job)}
+                          className="flex-shrink-0 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
+                          title="Move to draft applications"
+                        >
+                          📝 Draft
+                        </button>
                         <a
                           href={job.jobUrl}
                           target="_blank"
@@ -274,6 +386,13 @@ export default function JobOpportunities({ userId }: JobOpportunitiesProps) {
                           View Job
                           <ArrowTopRightOnSquareIcon className="h-4 w-4" />
                         </a>
+                        <button
+                          onClick={() => handleDelete(job.id)}
+                          className="flex-shrink-0 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+                          title="Delete this opportunity"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </div>
 

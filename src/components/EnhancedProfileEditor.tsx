@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { XMarkIcon, UserCircleIcon, BriefcaseIcon, CogIcon, DocumentArrowUpIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
 import CVUpload from './CVUpload'
 import ResumeManager from './ResumeManager'
@@ -56,26 +56,52 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
   const [activeTab, setActiveTab] = useState<TabType>('cv')
   const [newSkill, setNewSkill] = useState('')
 
-  useEffect(() => {
-    loadProfile()
-    // Prevent body scroll on mobile
-    document.body.classList.add('modal-open')
-    return () => document.body.classList.remove('modal-open')
-  }, [userId])
-
-  const loadProfile = async () => {
+const loadProfile = useCallback(async () => {
     try {
       const response = await fetch(`/api/profile?userId=${userId}`)
+      
+      // Check if response is OK
+      if (!response.ok) {
+        console.error('Profile API error:', response.status, response.statusText)
+        return
+      }
+      
+      // Check content type
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Response is not JSON:', contentType)
+        const text = await response.text()
+        console.error('Response body:', text)
+        return
+      }
+      
       const data = await response.json()
       if (data.profile) {
-        setProfile(data.profile)
+        setProfile({
+          primarySkills: [],
+          secondarySkills: [],
+          learningSkills: [],
+          workHistory: [],
+          education: [],
+          jobTitles: [],
+          preferredCountries: [],
+          industries: [],
+          ...data.profile
+        })
       }
     } catch (error) {
       console.error('Failed to load profile:', error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [userId])
+
+  useEffect(() => {
+    loadProfile()
+    // Prevent body scroll on mobile
+    document.body.classList.add('modal-open')
+    return () => document.body.classList.remove('modal-open')
+  }, [loadProfile])
 
   const handleSave = async () => {
     setSaving(true)
@@ -396,10 +422,10 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
                           if (e.key === 'Enter') {
                             const input = e.target as HTMLInputElement
                             const value = input.value.trim()
-                            if (value && !profile.preferredCountries.includes(value)) {
+                            if (value && !(profile.preferredCountries || []).includes(value)) {
                               setProfile({
                                 ...profile,
-                                preferredCountries: [...profile.preferredCountries, value]
+                                preferredCountries: [...(profile.preferredCountries || []), value]
                               })
                               input.value = ''
                             }
@@ -408,7 +434,7 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
                       />
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {profile.preferredCountries.map((country) => (
+                      {(profile.preferredCountries || []).map((country) => (
                         <span
                           key={country}
                           className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full text-sm"
@@ -418,7 +444,7 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
                             onClick={() =>
                               setProfile({
                                 ...profile,
-                                preferredCountries: profile.preferredCountries.filter(c => c !== country)
+                                preferredCountries: (profile.preferredCountries || []).filter(c => c !== country)
                               })
                             }
                             className="hover:text-blue-900 dark:hover:text-blue-100"

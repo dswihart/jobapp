@@ -17,16 +17,21 @@ export default function CVUpload({ userId, onProfileExtracted }: CVUploadProps) 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
-      // Validate file type
+      // Validate file type - check both MIME type and extension
       const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
-      if (!validTypes.includes(selectedFile.type)) {
+      const validExtensions = ['.pdf', '.doc', '.docx', '.txt']
+      const fileName = selectedFile.name.toLowerCase()
+      const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext))
+      
+      // Accept file if either MIME type matches OR extension is valid (some browsers report incorrect MIME types)
+      if (!validTypes.includes(selectedFile.type) && !hasValidExtension) {
         setError('Please upload a PDF, DOC, DOCX, or TXT file')
         return
       }
 
-      // Validate file size (max 5MB)
-      if (selectedFile.size > 5 * 1024 * 1024) {
-        setError('File size must be less than 5MB')
+      // Validate file size (max 10MB)
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setError('File size must be less than 10MB')
         return
       }
 
@@ -121,7 +126,7 @@ export default function CVUpload({ userId, onProfileExtracted }: CVUploadProps) 
                 />
               </label>
               <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                Supported formats: PDF, DOC, DOCX, TXT (max 5MB)
+                Supported formats: PDF, DOC, DOCX, TXT (max 10MB)
               </p>
             </div>
           )}

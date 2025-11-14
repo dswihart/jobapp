@@ -7,7 +7,7 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
+  status: 'DRAFT' | 'PENDING' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED' | 'ARCHIVED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
@@ -34,9 +34,11 @@ interface ApplicationModalProps {
 
 const statusOptions = [
   { value: 'DRAFT', label: 'Draft' },
+  { value: 'PENDING', label: 'Pending' },
   { value: 'APPLIED', label: 'Applied' },
   { value: 'INTERVIEWING', label: 'Interviewing' },
-  { value: 'REJECTED', label: 'Rejected' }
+  { value: 'REJECTED', label: 'Rejected' },
+  { value: 'ARCHIVED', label: 'Archived' }
 ]
 
 export default function ApplicationModal({ isOpen, onClose, onSubmit, application }: ApplicationModalProps) {
@@ -46,7 +48,8 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
     status: 'DRAFT' as Application['status'],
     notes: '',
     jobUrl: '',
-    appliedDate: ''
+    appliedDate: '',
+    createdAt: ''
   })
 
   useEffect(() => {
@@ -57,16 +60,20 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
         status: application.status,
         notes: application.notes || '',
         jobUrl: application.jobUrl || '',
-        appliedDate: application.appliedDate ? application.appliedDate.split('T')[0] : ''
+        appliedDate: application.appliedDate ? application.appliedDate.split('T')[0] : '',
+        createdAt: application.createdAt ? application.createdAt.split('T')[0] : ''
       })
     } else {
+      // For new applications, default to today's date
+      const today = new Date().toISOString().split('T')[0]
       setFormData({
         company: '',
         role: '',
         status: 'DRAFT',
         notes: '',
         jobUrl: '',
-        appliedDate: ''
+        appliedDate: '',
+        createdAt: today
       })
     }
   }, [application, isOpen])
@@ -169,6 +176,24 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* Created Date - NEW FIELD */}
+              <div>
+                <label htmlFor="createdAt" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Created Date
+                </label>
+                <input
+                  type="date"
+                  id="createdAt"
+                  name="createdAt"
+                  value={formData.createdAt}
+                  onChange={handleChange}
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  The date this application was created/added to your tracker
+                </p>
               </div>
 
               {/* Applied Date */}

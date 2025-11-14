@@ -1,0 +1,25 @@
+name,sourceType,feedUrl,enabled,userId,search_keywords,exclude_keywords
+Barcelona Cyber Jobs,rss,https://rss.app/feeds/v1.1/8v16VEBGjIYkFkpH.json,t,default-user-id,{},{}
+Barcelona Security Jobs,rss,https://rss.app/feeds/v1.1/C5zHjN9WFy1WI1sN.json,t,default-user-id,{},{}
+Barcelona Tech Jobs,rss,https://rss.app/feeds/v1.1/C5zHjN9WFy1WI1sN.json,t,default-user-id,{},{}
+brazil,rss,https://br.indeed.com/jobs?q=internacional&l=&vjk=631f1f3bab355f63,t,cmgxx65j800004rfa28dcq5wl,{},{}
+CyberSecurity JobSite EU,rss,https://www.cybersecurityjobsite.com/jobsrss/?keywords=security+engineer&location=europe,t,default-user-id,{},{}
+CyberSecurity JobSite Spain,rss,https://rss.app/feeds/v1.1/A3zJXmli7QilaybJ.json,t,default-user-id,{},{}
+CyberSecurity Remote Jobs,rss,https://rss.app/feeds/X52InKYY4d72H6H7.xml,t,default-user-id,{},{}
+EuroTechJobs,web_scrape,,t,default-user-id,{},{}
+Foorilla Remote Jobs,rss,https://foorilla.com/account/feed/N7bL10Q0T9GGbac/rss/,t,default-user-id,{},{}
+Foorilla Security Jobs,rss,https://foorilla.com/account/feed/0SqKXfDIRw65VD0/rss/,t,default-user-id,{},{}
+Foorilla Tech Jobs Spain,rss,https://foorilla.com/account/feed/0SqKXfDIRw65VD0/rss/,t,default-user-id,{},{}
+Honeypot EU Tech Jobs,web_scrape,,t,default-user-id,{},{}
+Indeed,rss,https://br.indeed.com/jobs?q=internacional&l=&vjk=631f1f3bab355f63,t,default-user-id,{},{}
+Indeed Security Engineer Spain,rss,https://rss.indeed.com/rss?q=,t,default-user-id,{},{}
+Infosec-Jobs Remote,rss,https://infosec-jobs.com/remote-jobs/rss/,t,default-user-id,{},{}
+Landing.jobs Portugal,web_scrape,,t,default-user-id,{},{}
+RemoteOK Security,rss,https://remoteok.com/remote-security+engineer-jobs.rss,t,default-user-id,{},{}
+Remotive All Remote Jobs,rss,https://remotive.com/remote-jobs/rss-feed,t,default-user-id,{},{}
+Security Jobs Feed 3,rss,https://rss.app/feeds/v1.1/Dphao3rl7Yywrt77.json,t,default-user-id,{},{}
+Security Jobs Feed 4,rss,https://rss.app/feeds/v1.1/7SQuJ0MlE9azN6Cz.json,t,default-user-id,{},{}
+Stack Overflow Jobs Europe,web_scrape,,t,default-user-id,{},{}
+TechMeAbroad Europe,web_scrape,,t,default-user-id,{},{}
+The Muse Tech Jobs,web_scrape,,t,default-user-id,{},{}
+WeWorkRemotely All Jobs,rss,https://weworkremotely.com/remote-jobs.rss,t,default-user-id,{},{}

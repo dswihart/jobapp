@@ -6,7 +6,7 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
+  status: 'DRAFT' | 'PENDING' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED' | 'ARCHIVED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
@@ -35,7 +35,7 @@ const statusLabels = {
   REJECTED: 'Rejected'
 }
 
-const COLORS = ['#6B7280', '#3B82F6', '#F59E0B', '#EF4444']
+const COLORS = ['#6B7280', '#A855F7', '#3B82F6', '#F59E0B', '#EF4444']
 
 export default function ProgressChart({ applications }: ProgressChartProps) {
   // Count applications by status
@@ -67,10 +67,14 @@ export default function ProgressChart({ applications }: ProgressChartProps) {
   return (
     <div className="space-y-6">
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-gray-50 rounded-lg p-4">
           <div className="text-2xl font-bold text-gray-600">{statusCounts.DRAFT || 0}</div>
           <div className="text-sm text-gray-600">Draft</div>
+        </div>
+        <div className="bg-purple-50 rounded-lg p-4">
+          <div className="text-2xl font-bold text-purple-600">{statusCounts.PENDING || 0}</div>
+          <div className="text-sm text-purple-600">Pending</div>
         </div>
         <div className="bg-blue-50 rounded-lg p-4">
           <div className="text-2xl font-bold text-blue-600">{statusCounts.APPLIED || 0}</div>

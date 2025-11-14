@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    return NextResponse.json(contact)
+    return NextResponse.json({ success: true, contact })
   } catch (error) {
     console.error('Failed to create contact:', error)
     return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 })

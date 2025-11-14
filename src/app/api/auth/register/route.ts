@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
         password: hashedPassword,
         name: name || 'Job Seeker',
         skills: [],
+        autoScan: true,
       },
     })
 

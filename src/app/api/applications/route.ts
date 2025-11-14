@@ -15,6 +15,8 @@ export async function GET() {
         userId: session.user.id
       },
       include: {
+        resume: true,
+        coverLetter: true,
         contacts: true,
         user: true
       },
@@ -40,10 +42,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { company, role, status, notes, jobUrl, appliedDate } = body
 
-    // Automatically set appliedDate when status is APPLIED
+    // Automatically set appliedDate when status is APPLIED or INTERVIEWING
     let finalAppliedDate = appliedDate ? new Date(appliedDate) : null
     const finalStatus = status || 'APPLIED'
-    if (finalStatus === 'APPLIED' && !appliedDate) {
+    if ((finalStatus === 'APPLIED' || finalStatus === 'INTERVIEWING') && !appliedDate) {
       finalAppliedDate = new Date()
     }
 
@@ -58,6 +60,8 @@ export async function POST(request: NextRequest) {
         userId: session.user.id
       },
       include: {
+        resume: true,
+        coverLetter: true,
         contacts: true
       }
     })

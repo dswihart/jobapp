@@ -25,3 +25,27 @@ export async function DELETE(
     }, { status: 500 })
   }
 }
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params
+    const body = await request.json()
+
+    // Update job opportunity (typically to mark as read)
+    await prisma.jobOpportunity.update({
+      where: { id },
+      data: { isRead: body.isRead ?? true }
+    })
+
+    return NextResponse.json({ success: true })
+
+  } catch (error) {
+    console.error('Error updating opportunity:', error)
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Failed to update opportunity'
+    }, { status: 500 })
+  }
+}

@@ -233,11 +233,6 @@ export default function JobSourcesManager({ userId }: Props) {
                 <div>
                   <h3 className="font-semibold text-gray-900 dark:text-white">
                     {source.name}
-                    {source.isBuiltIn && (
-                      <span className="ml-2 text-xs bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
-                        Built-in
-                      </span>
-                    )}
                   </h3>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     {source.description || `${source.sourceType.toUpperCase()} source`}
@@ -257,7 +252,7 @@ export default function JobSourcesManager({ userId }: Props) {
               </div>
             </div>
 
-            {!source.isBuiltIn && (
+            {true && (
               <button
                 onClick={() => handleDelete(source.id, source.name)}
                 className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"

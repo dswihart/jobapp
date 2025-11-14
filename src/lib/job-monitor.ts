@@ -165,6 +165,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
         industries: (user.industries || []) as string[],
         summary: user.summary || undefined,
         workPreference: user.workPreference || undefined,
+        preferredCountries: (user.preferredCountries || []) as string[],
         salaryExpectation: user.salaryExpectation || undefined
       }
 
@@ -391,8 +392,19 @@ export async function markAlertAsRead(alertId: string) {
   })
 }
 
+
 export async function getJobOpportunities(userId: string) {
-  return await prisma.jobOpportunity.findMany({
+  console.log('[DEBUG getJobOpportunities] Called with userId:', userId)
+  
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { preferredCountries: true }
+  })
+  const preferredCountries = user?.preferredCountries || []
+  
+  console.log('[DEBUG getJobOpportunities] Preferred countries:', preferredCountries)
+  
+  const allJobs = await prisma.jobOpportunity.findMany({
     where: {
       userId,
       isArchived: false
@@ -401,4 +413,69 @@ export async function getJobOpportunities(userId: string) {
       createdAt: 'desc'
     }
   })
+  
+  console.log('[DEBUG getJobOpportunities] Found', allJobs.length, 'unarchived jobs')
+  
+  if (preferredCountries.length === 0) {
+    console.log('[DEBUG] No preferred countries - returning all jobs')
+    return allJobs
+  }
+  
+  const filteredJobs = allJobs.filter(job => {
+    const location = (job.location || '').toLowerCase()
+    const title = (job.title || '').toLowerCase()
+    const description = (job.description || '').toLowerCase()
+    
+    if (!job.location || job.location.trim() === '') {
+      console.log('[DEBUG] Including (no location):', job.title)
+      return true
+    }
+    
+    if (location.includes('remote') || location.includes('worldwide') ||
+        location.includes('anywhere') || location.includes('global') ||
+        title.includes('remote') || description.includes('remote')) {
+      console.log('[DEBUG] Including (remote):', job.title)
+      return true
+    }
+    
+    const matches = preferredCountries.some(country => {
+      const countryLower = country.toLowerCase()
+      
+      if (location.includes(countryLower)) {
+        return true
+      }
+      
+      const locationVariations: Record<string, string[]> = {
+        'spain': ['spain', 'españa', 'spanish', 'barcelona', 'madrid', 'valencia', 'seville'],
+        'barcelona': ['barcelona', 'spain', 'españa'],
+        'españa': ['españa', 'spain', 'spanish', 'barcelona'],
+        'europe': ['europe', 'european', 'eu ', ' eu', 'emea'],
+        'uk': ['uk', 'united kingdom', 'britain', 'british', 'london', 'manchester', 'edinburgh'],
+        'usa': ['usa', 'united states', 'america', 'us ', ' us'],
+        'germany': ['germany', 'german', 'berlin', 'munich', 'hamburg'],
+        'france': ['france', 'french', 'paris', 'lyon'],
+        'netherlands': ['netherlands', 'dutch', 'amsterdam', 'rotterdam'],
+        'portugal': ['portugal', 'portuguese', 'lisbon', 'porto']
+      }
+      
+      const variations = locationVariations[countryLower]
+      if (variations) {
+        return variations.some(variant => location.includes(variant))
+      }
+      
+      return false
+    })
+    
+    if (matches) {
+      console.log('[DEBUG] Including (match):', job.title, '-', job.location)
+    } else {
+      console.log('[DEBUG] Filtering out:', job.title, '-', job.location)
+    }
+    
+    return matches
+  })
+  
+  console.log('[DEBUG getJobOpportunities] Returning', filteredJobs.length, 'jobs')
+  
+  return filteredJobs
 }

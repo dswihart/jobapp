@@ -8,16 +8,16 @@ export async function GET(
 ) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { id } = await params
     const application = await prisma.application.findUnique({
-      where: { 
+      where: {
         id,
-        userId: session.user.id 
+        userId: session.user.id
       },
       include: {
         contacts: true,
@@ -42,41 +42,51 @@ export async function PUT(
 ) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { id } = await params
     const body = await request.json()
-    const { company, role, status, notes, jobUrl, appliedDate } = body
+    const { company, role, status, notes, jobUrl, appliedDate, createdAt } = body
 
-    // First verify the application belongs to this user
+    // First verify the application belongs to this user and get current data
     const existing = await prisma.application.findUnique({
       where: { id },
-      select: { userId: true }
+      select: { userId: true, appliedDate: true }
     })
 
     if (!existing || existing.userId !== session.user.id) {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
 
-    // Automatically set appliedDate when status changes to APPLIED
-    let finalAppliedDate = appliedDate ? new Date(appliedDate) : null
-    if (status === 'APPLIED' && !appliedDate) {
+    // Automatically set appliedDate when status changes to APPLIED or INTERVIEWING
+    // Only set if not already provided in the request and not already set in database
+    let finalAppliedDate = appliedDate ? new Date(appliedDate) : existing.appliedDate
+    if ((status === 'APPLIED' || status === 'INTERVIEWING') && !finalAppliedDate) {
       finalAppliedDate = new Date()
+    }
+
+    // Prepare update data
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: Record<string, any> = {
+      company,
+      role,
+      status,
+      notes,
+      jobUrl,
+      appliedDate: finalAppliedDate
+    }
+
+    // Only update createdAt if it's provided
+    if (createdAt) {
+      updateData.createdAt = new Date(createdAt)
     }
 
     const application = await prisma.application.update({
       where: { id },
-      data: {
-        company,
-        role,
-        status,
-        notes,
-        jobUrl,
-        appliedDate: finalAppliedDate
-      },
+      data: updateData,
       include: {
         contacts: true
       }
@@ -95,7 +105,7 @@ export async function DELETE(
 ) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }

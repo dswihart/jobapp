@@ -1,5 +1,5 @@
 'use client'
-import { DocumentTextIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, SparklesIcon } from '@heroicons/react/24/outline'
 
 import { useState, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
@@ -8,9 +8,10 @@ import ApplicationList from './ApplicationList'
 import ApplicationBoard from './ApplicationBoard'
 import ProgressChart from './ProgressChart'
 import ApplicationModal from './ApplicationModal'
+import CoverLetterModal from './CoverLetterModal'
 import EnhancedProfileEditor from './EnhancedProfileEditor'
 import ThemeToggle from './ThemeToggle'
-import AlertsPanel from './AlertsPanel'
+import UnifiedNotificationsPanel from './UnifiedNotificationsPanel'
 import JobSearchSettings from './JobSearchSettings'
 import JobSourcesManager from './JobSourcesManager'
 import ResumeManager from './ResumeManager'
@@ -23,7 +24,7 @@ interface Application {
   id: string
   company: string
   role: string
-  status: 'DRAFT' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED'
+  status: 'DRAFT' | 'PENDING' | 'APPLIED' | 'INTERVIEWING' | 'REJECTED' | 'ARCHIVED'
   notes?: string
   jobUrl?: string
   appliedDate?: string
@@ -51,48 +52,6 @@ interface User {
   dailyApplicationGoal?: number
 }
 
-// Array of motivational messages that rotate daily
-const motivationalMessages = [
-  "Keep up the momentum!",
-  "Every application brings you closer to your dream job!",
-  "You're doing great! Stay consistent!",
-  "Your persistence will pay off!",
-  "Today is a new opportunity!",
-  "Believe in yourself and your journey!",
-  "Small steps lead to big achievements!",
-  "Stay positive and keep pushing forward!",
-  "Your next opportunity is just around the corner!",
-  "Success is the sum of small efforts repeated daily!",
-  "Don't stop until you're proud!",
-  "Great things take time - keep going!",
-  "You're one application closer to success!",
-  "Stay focused on your goals!",
-  "Your dedication is inspiring!",
-  "Every no brings you closer to a yes!",
-  "Progress, not perfection!",
-  "Keep your head up and keep moving forward!",
-  "You've got this!",
-  "Consistency is key to success!",
-  "Your future self will thank you!",
-  "Make today count!",
-  "Dream big, work hard, stay focused!",
-  "You're building your future, one application at a time!",
-  "Keep pushing - opportunities are coming!",
-  "Your hard work will be rewarded!",
-  "Stay committed to your goals!",
-  "Never give up on your dreams!",
-  "You're making excellent progress!",
-  "Keep going - you're unstoppable!"
-];
-
-// Function to get day of year (for rotating messages)
-const getDayOfYear = () => {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1);
-  const diff = now.getTime() - start.getTime();
-  const oneDay = 1000 * 60 * 60 * 24;
-  return Math.floor(diff / oneDay);
-};
 
 export default function Dashboard() {
   const [applications, setApplications] = useState<Application[]>([])
@@ -101,20 +60,40 @@ export default function Dashboard() {
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [editingApplication, setEditingApplication] = useState<Application | null>(null)
+  const [isCoverLetterModalOpen, setIsCoverLetterModalOpen] = useState(false)
+  const [coverLetterApplication, setCoverLetterApplication] = useState<Application | null>(null)
   const [loading, setLoading] = useState(true)
   const [isParsingUrl, setIsParsingUrl] = useState(false)
   const [todayApplicationsCount, setTodayApplicationsCount] = useState(0)
   const [dailyMessage, setDailyMessage] = useState('')
   const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; goalMet: boolean }>>([])
+  const [last7DaysTotal, setLast7DaysTotal] = useState(0)
+  // Restore original line
+  // Fetch AI-generated motivational message
+  const fetchMotivationalMessage = async () => {
+    try {
+      const userId = user?.id
+      const url = userId
+        ? `/api/ai/motivational-message?userId=${userId}`
+        : '/api/ai/motivational-message'
+
+      const response = await fetch(url)
+      if (response.ok) {
+        const data = await response.json()
+        setDailyMessage(data.message)
+      } else {
+        setDailyMessage('Keep pushing forward! Your dream job awaits!')
+      }
+    } catch (error) {
+      console.error('Failed to fetch motivational message:', error)
+      setDailyMessage('Every application brings you closer to success!')
+    }
+  }
 
   useEffect(() => {
-    // Set daily motivational message based on day of year
-    const dayOfYear = getDayOfYear();
-    const messageIndex = dayOfYear % motivationalMessages.length;
-    setDailyMessage(motivationalMessages[messageIndex]);
-
     fetchApplications()
     fetchUser()
+    fetchMotivationalMessage()
   }, [])
 
   useEffect(() => {
@@ -122,11 +101,20 @@ export default function Dashboard() {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
+    // Helper function to get date string in YYYY-MM-DD format using LOCAL timezone
+    const getDateString = (date: Date): string => {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      return `${year}-${month}-${day}`
+    }
+
+    const todayStr = getDateString(new Date())
+    
     const count = applications.filter(app => {
       if (!app.appliedDate) return false
-      const appliedDate = new Date(app.appliedDate)
-      appliedDate.setHours(0, 0, 0, 0)
-      return appliedDate.getTime() === today.getTime()
+      const appliedDateStr = getDateString(new Date(app.appliedDate))
+      return appliedDateStr === todayStr
     }).length
 
     setTodayApplicationsCount(count)
@@ -134,16 +122,15 @@ export default function Dashboard() {
     // Calculate past 7 days goals (using user's daily goal or default to 6)
     const dailyGoal = user?.dailyApplicationGoal || 6
     const goalData = []
-    for (let i = 1; i <= 7; i++) {
+    for (let i = 0; i < 7; i++) {
       const date = new Date()
       date.setDate(date.getDate() - i)
-      date.setHours(0, 0, 0, 0)
+      const dateStr = getDateString(date)
 
       const dayCount = applications.filter(app => {
         if (!app.appliedDate) return false
-        const appliedDate = new Date(app.appliedDate)
-        appliedDate.setHours(0, 0, 0, 0)
-        return appliedDate.getTime() === date.getTime()
+        const appliedDateStr = getDateString(new Date(app.appliedDate))
+        return appliedDateStr === dateStr
       }).length
 
       goalData.push({
@@ -154,15 +141,24 @@ export default function Dashboard() {
     }
 
     setPastDaysGoals(goalData.reverse())
+
+    // Calculate total applications for last 7 days
+    const total7Days = goalData.reduce((sum, day) => sum + day.count, 0)
+    setLast7DaysTotal(total7Days)
   }, [applications, user])
 
   const fetchApplications = async () => {
     try {
       const response = await fetch('/api/applications')
       const data = await response.json()
-      setApplications(data)
+      if (Array.isArray(data)) {
+        setApplications(data)
+      } else {
+        setApplications([])
+      }
     } catch (error) {
       console.error('Failed to fetch applications:', error)
+      setApplications([])
     } finally {
       setLoading(false)
     }
@@ -210,6 +206,10 @@ export default function Dashboard() {
     setIsApplicationModalOpen(true)
   }
 
+  const handleGenerateCoverLetter = (application: Application) => {
+    setCoverLetterApplication(application)
+    setIsCoverLetterModalOpen(true)
+  }
   const handleDeleteApplication = async (id: string) => {
     try {
       await fetch(`/api/applications/${id}`, {
@@ -254,9 +254,36 @@ export default function Dashboard() {
         body: JSON.stringify({ url: jobUrl }),
       })
 
+      // Check if response is OK before trying to parse JSON
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Parse job URL failed:', errorText)
+        alert(`Failed to parse job URL: ${errorText || response.statusText}`)
+        return
+      }
+
       const result = await response.json()
 
       if (result.success && result.data) {
+        // Show fit score if available
+        if (result.fitScore) {
+          const fitMessage = `
+Job parsed successfully!
+
+Match Score: ${result.fitScore.overall}%
+- Title Match: ${result.fitScore.titleMatch}%
+- Skill Match: ${result.fitScore.skillMatch}%
+- Experience Match: ${result.fitScore.experienceMatch}%
+- Location Match: ${result.fitScore.locationMatch}%
+
+Would you like to add this job to your applications?`
+          
+          if (!confirm(fitMessage)) {
+            return
+          }
+        }
+
+        // Pre-populate the application modal with parsed data
         // Pre-populate the application modal with parsed data
         setEditingApplication({
           id: '',
@@ -301,16 +328,16 @@ export default function Dashboard() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <ThemeToggle />
+                {user?.id && <UnifiedNotificationsPanel userId={user.id} />}
                 <JobMonitor userId={user?.id || ""} onComplete={() => {}} />
-                {user?.id && <AlertsPanel userId={user.id} />}
-                {user?.id && <JobSearchSettings userId={user.id} />}
+                {user?.id && <JobSearchSettings userId={user.id} onSettingsSaved={fetchUser} />}
                 <a
-                  href="/cover-letters"
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"
+                  href="/resume-tailor"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"
                 >
-                  <DocumentTextIcon className="h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="hidden sm:inline">Cover Letters</span>
-                  <span className="sm:hidden">Letters</span>
+                  <SparklesIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden sm:inline">Resume Tailor</span>
+                  <span className="sm:hidden">Tailor</span>
                 </a>
                 <button
                   onClick={() => setIsProfileModalOpen(true)}
@@ -322,7 +349,7 @@ export default function Dashboard() {
                   onClick={handleQuickAddFromUrl}
                   disabled={isParsingUrl}
                   className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"
-                  title="Add job from URL"
+                  title="Add job from URL (or try our LinkedIn bookmarklet at /bookmarklet)"
                 >
                   <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span className="hidden sm:inline">{isParsingUrl ? 'Parsing...' : 'Add from URL'}</span>
@@ -354,8 +381,31 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* 7-Day Application Tracker */}
+      <div className="bg-gradient-to-r from-purple-600 to-purple-700 dark:from-purple-700 dark:to-purple-800 shadow-lg">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="bg-white dark:bg-gray-800 rounded-full p-3">
+                <ChartBarIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">Last 7 Days Total</h2>
+                <p className="text-xs text-purple-100">Applications submitted in the past week</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-4xl font-bold text-white">{last7DaysTotal}</div>
+              <p className="text-sm text-purple-100">
+                {last7DaysTotal === 1 ? 'application' : 'applications'} / {(user?.dailyApplicationGoal || 6) * 7} goal
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Today&apos;s Applications Banner */}
-      <div className="bg-gradient-to-r from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 shadow-lg">
+      <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-slate-700 dark:to-slate-800 shadow-lg">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -363,8 +413,8 @@ export default function Dashboard() {
                 <ChartBarIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Today&apos;s Applications</h2>
-                <p className="text-sm text-blue-100">{dailyMessage}</p>
+                <h2 className="text-lg font-semibold text-white">Today&apos;s Applications - {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</h2>
+                <p className="text-xs text-blue-100">{dailyMessage}</p>
               </div>
             </div>
             <div className="text-right">
@@ -380,10 +430,10 @@ export default function Dashboard() {
       {/* Past 7 Days Goals Tracker */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Past 7 Days Goal Tracker ({user?.dailyApplicationGoal || 6} applications/day)</h3>
-          <div className="grid grid-cols-7 gap-2">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">Past 7 Days Goal Tracker ({user?.dailyApplicationGoal || 6} applications/day)</h3>
+          <div className="flex justify-center gap-2">
             {pastDaysGoals.map((day, index) => (
-              <div key={index} className="flex flex-col items-center">
+              <div key={index} className="flex flex-col items-center w-24">
                 <div className={`w-full p-3 rounded-lg ${day.goalMet ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}>
                   {day.goalMet ? (
                     <CheckCircleIcon className="h-8 w-8 text-green-600 dark:text-green-400 mx-auto" />
@@ -406,21 +456,21 @@ export default function Dashboard() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <CollapsibleSection title="Job Sources" defaultExpanded={true} className="mb-8">
+        <CollapsibleSection title="Job Sources" defaultExpanded={false} className="mb-8">
           <JobSourcesManager userId={user?.id || ""} />
         </CollapsibleSection>
 
-        <CollapsibleSection title="My Resumes" defaultExpanded={true} className="mb-8">
+        <CollapsibleSection title="My Resumes" defaultExpanded={false} className="mb-8">
           <ResumeManager />
         </CollapsibleSection>
 
-<CollapsibleSection title="Job Opportunities" defaultExpanded={true} className="mb-8">
+<CollapsibleSection title="Job Opportunities" defaultExpanded={false} className="mb-8">
           <JobOpportunities userId={user?.id || ""} onApplicationCreated={fetchApplications} />
         </CollapsibleSection>
 
-        <div className="mb-8">
+        <CollapsibleSection title="Applications Over Time" defaultExpanded={true} className="mb-8">
           <ApplicationsByDateChart userId={user?.id} />
-        </div>
+        </CollapsibleSection>
 
         <div className="mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
@@ -468,6 +518,7 @@ export default function Dashboard() {
             onDelete={handleDeleteApplication}
             onStatusUpdate={handleStatusUpdate}
             onRefresh={fetchApplications}
+            onGenerateCoverLetter={handleGenerateCoverLetter}
             userId={user?.id || "default-user-id"}
           />
         ) : (
@@ -489,10 +540,19 @@ export default function Dashboard() {
         onSubmit={handleApplicationSubmit}
         application={editingApplication}
       />
+n      <CoverLetterModal
+        isOpen={isCoverLetterModalOpen}
+        onClose={() => {
+          setIsCoverLetterModalOpen(false)
+          setCoverLetterApplication(null)
+        }}
+        application={coverLetterApplication}
+        onSuccess={fetchApplications}
+      />
 
-      {isProfileModalOpen && (
+      {isProfileModalOpen && user?.id && (
         <EnhancedProfileEditor
-          userId={user?.id || ""}
+          userId={user.id}
           onClose={() => setIsProfileModalOpen(false)}
         />
       )}

@@ -5,6 +5,10 @@ import { randomUUID } from 'crypto'
 import * as pdfParse from 'pdf-parse'
 import mammoth from 'mammoth'
 
+// Configure route to allow larger file uploads (10MB)
+export const dynamic = 'force-dynamic'
+export const maxDuration = 60 // 60 seconds timeout
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData()
@@ -13,6 +17,14 @@ export async function POST(request: Request) {
 
     if (!file || !userId) {
       return NextResponse.json({ error: 'Missing file or userId' }, { status: 400 })
+    }
+
+    // Check file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+    if (file.size > maxSize) {
+      return NextResponse.json({ 
+        error: 'File too large. Maximum size is 10MB.' 
+      }, { status: 413 })
     }
 
     // Save file
@@ -32,23 +44,39 @@ export async function POST(request: Request) {
     // Extract text from file
     let fileText = ''
 
-    console.log('[Upload CV] File type:', file.type, 'Name:', file.name)
+    console.log('[Upload CV] File type:', file.type, 'Name:', file.name, 'Size:', file.size)
 
-    if (file.type === 'text/plain') {
-      fileText = buffer.toString('utf-8')
-      console.log('[Upload CV] Extracted text from .txt file, length:', fileText.length)
-    } else if (file.type === 'application/pdf') {
+    const fileName = file.name.toLowerCase()
+    const isDocx = fileName.endsWith('.docx') || fileName.endsWith('.doc') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.type === 'application/msword'
+    const isPdf = fileName.endsWith('.pdf') || file.type === 'application/pdf'
+    const isTxt = fileName.endsWith('.txt') || file.type === 'text/plain'
+
+    if (isTxt) {
+      // Try UTF-8 first, fallback to other encodings
       try {
+        fileText = buffer.toString('utf-8')
+      } catch (e) {
+        // Fallback to latin1 if UTF-8 fails
+        fileText = buffer.toString('latin1')
+      }
+      console.log('[Upload CV] Extracted text from .txt file, length:', fileText.length)
+    } else if (isPdf) {
+      try {
+        // Parse PDF with options to preserve formatting and handle multiple languages
         // @ts-expect-error - pdfParse typing issue
-        const pdfData = await pdfParse(buffer)
+        const pdfData = await pdfParse(buffer, {
+          max: 0, // Parse all pages
+          // pdf-parse uses pdf.js which handles UTF-8 and various encodings automatically
+        })
         fileText = pdfData.text
-        console.log('[Upload CV] Extracted text from PDF, length:', fileText.length)
+        console.log('[Upload CV] Extracted text from PDF, length:', fileText.length, 'pages:', pdfData.numpages)
       } catch (pdfError) {
         console.error('[Upload CV] PDF parsing error:', pdfError)
         fileText = 'Failed to extract text from PDF. Please try uploading a .txt version of your resume.'
       }
-    } else if (file.type === 'application/msword' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+    } else if (isDocx) {
       try {
+        // mammoth handles multiple languages and encodings automatically
         const result = await mammoth.extractRawText({ buffer })
         fileText = result.value
         console.log('[Upload CV] Extracted text from DOCX, length:', fileText.length)

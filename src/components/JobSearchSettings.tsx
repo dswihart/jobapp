@@ -2,13 +2,6 @@
 import { useState, useEffect } from 'react'
 import { Cog6ToothIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
-interface SourceConfig {
-  name: string
-  enabled: boolean
-  type: string
-  rateLimitPerHour: number
-}
-
 interface SearchSettings {
   minFitScore: number
   maxJobAgeDays: number
@@ -17,7 +10,7 @@ interface SearchSettings {
   dailyApplicationGoal: number
 }
 
-export default function JobSearchSettings({ userId }: { userId: string }) {
+export default function JobSearchSettings({ userId, onSettingsSaved }: { userId: string; onSettingsSaved?: () => void }) {
   const [isOpen, setIsOpen] = useState(false)
   const [settings, setSettings] = useState<SearchSettings>({
     minFitScore: 40,
@@ -26,34 +19,8 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
     scanFrequency: 'daily',
     dailyApplicationGoal: 6
   })
-  const [sources, setSources] = useState<SourceConfig[]>([])
   const [saved, setSaved] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  const loadSources = async () => {
-    try {
-      const response = await fetch('/api/sources')
-      const data = await response.json()
-      setSources(data.sources || [])
-    } catch (error) {
-      console.error('Failed to load sources:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const toggleSource = async (sourceName: string, enabled: boolean) => {
-    try {
-      await fetch('/api/sources/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceName, enabled })
-      })
-      await loadSources()
-    } catch (error) {
-      console.error('Failed to toggle source:', error)
-    }
-  }
+  
 
   const saveSettings = async () => {
     try {
@@ -65,12 +32,19 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
       const data = await response.json()
       if (data.success) {
         setSaved(true)
-        setTimeout(() => setSaved(false), 3000)
+        if (onSettingsSaved) onSettingsSaved()
+        // Close modal after 1 second to show success message
+        setTimeout(() => {
+          setSaved(false)
+          setIsOpen(false)
+        }, 1000)
       } else {
         console.error('Failed to save settings:', data.error)
+        alert('Failed to save settings. Please try again.')
       }
     } catch (error) {
       console.error('Error saving settings:', error)
+      alert('Error saving settings. Please try again.')
     }
   }
 
@@ -88,10 +62,7 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
       }
     }
     loadSettings()
-    loadSources()
   }, [userId])
-
-  const enabledSourcesCount = sources.filter(s => s.enabled).length
 
   return (
     <>
@@ -159,48 +130,6 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium mb-3">
-                  Job Sources ({enabledSourcesCount} active)
-                </label>
-                {loading ? (
-                  <div className="text-center py-4 text-gray-500">
-                    Loading sources...
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {sources.map(source => (
-                      <label
-                        key={source.name}
-                        className="flex items-center gap-2 p-3 border rounded-lg dark:border-neutral-600 hover:bg-gray-50 dark:hover:bg-neutral-700 cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={source.enabled}
-                          onChange={(e) => toggleSource(source.name, e.target.checked)}
-                          className="h-4 w-4"
-                        />
-                        <div className="flex-1">
-                          <div className="font-medium">{source.name}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            {source.type} • Rate limit: {source.rateLimitPerHour}/hour
-                          </div>
-                        </div>
-                        {source.enabled ? (
-                          <span className="px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 text-xs rounded">
-                            Active
-                          </span>
-                        ) : (
-                          <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 text-xs rounded">
-                            Disabled
-                          </span>
-                        )}
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <div className="border-t border-gray-200 dark:border-neutral-700 pt-6">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
@@ -253,7 +182,6 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
                 />
               </div>
 
-
               <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
                 <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
                   Current Configuration
@@ -261,7 +189,6 @@ export default function JobSearchSettings({ userId }: { userId: string }) {
                 <ul className="text-sm text-blue-800 dark:text-blue-400 space-y-1">
                   <li>• Minimum fit score: <strong>{settings.minFitScore}%</strong></li>
                   <li>• Jobs from last <strong>{settings.maxJobAgeDays} days</strong></li>
-                  <li>• Active sources: <strong>{enabledSourcesCount} of {sources.length}</strong></li>
                   <li>• Auto-scan: <strong>{settings.autoScan ? `Yes (${settings.scanFrequency})` : 'No'}</strong></li>
                 </ul>
               </div>

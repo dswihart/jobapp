@@ -13,7 +13,7 @@ export async function GET() {
     })
 
     const dailyStats = []
-    for (let i = 0; i < 7; i++) {
+    for (let i = 6; i >= 0; i--) {  // Changed to chronological order (oldest first)
       const date = new Date()
       date.setDate(date.getDate() - i)
       date.setHours(0, 0, 0, 0)
@@ -21,28 +21,14 @@ export async function GET() {
       const nextDate = new Date(date)
       nextDate.setDate(nextDate.getDate() + 1)
 
+      // Count applications by appliedDate only (no fallback to updatedAt)
+      // This matches the frontend Dashboard logic and ensures consistency
       const count = await prisma.application.count({
         where: {
-          status: 'APPLIED',
-          OR: [
-            {
-              appliedDate: {
-                gte: date,
-                lt: nextDate
-              }
-            },
-            {
-              AND: [
-                { appliedDate: null },
-                {
-                  updatedAt: {
-                    gte: date,
-                    lt: nextDate
-                  }
-                }
-              ]
-            }
-          ]
+          appliedDate: {
+            gte: date,
+            lt: nextDate
+          }
         }
       })
 
