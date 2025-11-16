@@ -286,7 +286,7 @@ export default function LoginPage() {
 
             {/* Horizontal Scrollable Goal Tracker */}
             <div className="overflow-x-auto pb-2">
-              <div className="flex gap-2 sm:gap-3 justify-center">
+              <div className="flex gap-2 sm:gap-3 justify-start sm:justify-center px-2 sm:px-0">
                 {displayStats.dailyStats.map((day, index) => {
                   const goalMet = day.count >= dailyGoal
                   return (

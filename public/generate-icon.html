@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Icon</title>
+</head>
+<body>
+    <canvas id="canvas" width="180" height="180"></canvas>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Background gradient
+        const gradient = ctx.createLinearGradient(0, 0, 180, 180);
+        gradient.addColorStop(0, '#3b82f6');
+        gradient.addColorStop(1, '#1e40af');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 180, 180);
+        
+        // Draw briefcase icon
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        
+        // Briefcase body
+        ctx.fillRect(40, 70, 100, 70);
+        ctx.strokeRect(40, 70, 100, 70);
+        
+        // Briefcase handle
+        ctx.beginPath();
+        ctx.moveTo(70, 70);
+        ctx.lineTo(70, 55);
+        ctx.lineTo(110, 55);
+        ctx.lineTo(110, 70);
+        ctx.stroke();
+        
+        // Briefcase lock
+        ctx.fillRect(85, 90, 10, 15);
+        
+        console.log('Icon generated on canvas');
+    </script>
+</body>
+</html>
