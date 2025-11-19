@@ -134,7 +134,7 @@ export default function Dashboard() {
       }).length
 
       goalData.push({
-        date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        date: date.toISOString(),
         count: dayCount,
         goalMet: dayCount >= dailyGoal
       })
