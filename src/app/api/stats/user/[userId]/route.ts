@@ -53,10 +53,6 @@ export async function GET(
       const count = await prisma.application.count({
         where: {
           userId,
-          OR: [
-            { status: 'APPLIED' },
-            { status: 'INTERVIEWING' }
-          ],
           AND: {
             OR: [
               {

@@ -431,26 +431,26 @@ Would you like to add this job to your applications?`
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">Past 30 Days Goal Tracker ({user?.dailyApplicationGoal || 6} applications/day)</h3>
-          <div className="flex justify-center gap-2">
-            {pastDaysGoals.map((day, index) => (
-              <div key={index} className="flex flex-col items-center w-24">
-                <div className={`w-full p-3 rounded-lg ${day.goalMet ? 'bg-green-100 dark:bg-green-900' : 'bg-red-100 dark:bg-red-900'}`}>
-                  {day.goalMet ? (
-                    <CheckCircleIcon className="h-8 w-8 text-green-600 dark:text-green-400 mx-auto" />
-                  ) : (
-                    <XCircleIcon className="h-8 w-8 text-red-600 dark:text-red-400 mx-auto" />
-                  )}
-                  <div className="text-center mt-2">
-                    <div className={`text-lg font-bold ${day.goalMet ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                      {day.count}
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                      {day.date}
-                    </div>
+          <div className="grid grid-cols-10 gap-1 max-w-5xl mx-auto">
+            {pastDaysGoals.map((day, index) => {
+              const dateObj = new Date(day.date)
+              const dayNum = dateObj.toLocaleDateString("en-US", { day: "numeric" })
+              const monthShort = dateObj.toLocaleDateString("en-US", { month: "short" })
+              
+              return (
+                <div key={index} className={"aspect-square flex flex-col items-center justify-center rounded text-center border " + (day.goalMet ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600" : "bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600")}>
+                  <div className="text-[8px] text-gray-600 dark:text-gray-400">
+                    {monthShort}
+                  </div>
+                  <div className="text-[10px] font-bold text-gray-900 dark:text-gray-100">
+                    {dayNum}
+                  </div>
+                  <div className={"text-[10px] font-bold " + (day.goalMet ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400")}>
+                    {day.count}
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>

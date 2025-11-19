@@ -26,10 +26,6 @@ export async function GET() {
       // Count only APPLIED and INTERVIEWING applications (matching user stats logic)
       const count = await prisma.application.count({
         where: {
-          OR: [
-            { status: 'APPLIED' },
-            { status: 'INTERVIEWING' }
-          ],
           AND: {
             OR: [
               {
