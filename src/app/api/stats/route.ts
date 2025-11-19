@@ -13,30 +13,37 @@ export async function GET() {
     })
 
     const dailyStats = []
-    for (let i = 6; i >= 0; i--) {  // Changed to chronological order (oldest first)
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      date.setHours(0, 0, 0, 0)
+    
+    // Get last 3 months of data
+    const today = new Date()
+    
+    for (let monthOffset = 2; monthOffset >= 0; monthOffset--) {
+      const targetMonth = new Date(today.getFullYear(), today.getMonth() - monthOffset, 1)
+      const daysInMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate()
 
-      const nextDate = new Date(date)
-      nextDate.setDate(nextDate.getDate() + 1)
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), day)
+        date.setHours(0, 0, 0, 0)
 
-      // Count applications by appliedDate only (no fallback to updatedAt)
-      // This matches the frontend Dashboard logic and ensures consistency
-      const count = await prisma.application.count({
-        where: {
-          appliedDate: {
-            gte: date,
-            lt: nextDate
+        const nextDate = new Date(date)
+        nextDate.setDate(nextDate.getDate() + 1)
+
+        const count = await prisma.application.count({
+          where: {
+            appliedDate: {
+              gte: date,
+              lt: nextDate
+            }
           }
-        }
-      })
+        })
 
-      dailyStats.push({
-        date: date.toISOString().split('T')[0],
-        count: count,
-        dayLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-      })
+        dailyStats.push({
+          date: date.toISOString().split('T')[0],
+          count: count,
+          dayLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+          month: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        })
+      }
     }
 
     const stats = {

@@ -8,7 +8,6 @@ export async function GET(
   try {
     const { userId } = params
 
-    // Get user info
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -21,12 +20,10 @@ export async function GET(
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Get total applications count for this user
     const total = await prisma.application.count({
       where: { userId }
     })
 
-    // Get applications by status for this user
     const statusCounts = await prisma.application.groupBy({
       by: ['status'],
       where: { userId },
@@ -40,67 +37,72 @@ export async function GET(
       return acc
     }, {} as Record<string, number>)
 
-    // Get daily stats for the last 7 days (matching community stats logic)
     const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const dailyStats = []
 
-    // Generate stats for last 7 days in chronological order (oldest first)
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      date.setHours(0, 0, 0, 0)
+    const today = new Date()
+    
+    // Get last 3 months of data
+    for (let monthOffset = 2; monthOffset >= 0; monthOffset--) {
+      const targetMonth = new Date(today.getFullYear(), today.getMonth() - monthOffset, 1)
+      const daysInMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate()
 
-      const nextDate = new Date(date)
-      nextDate.setDate(nextDate.getDate() + 1)
+      for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), day)
+        date.setHours(0, 0, 0, 0)
 
-      // Count APPLIED and INTERVIEWING applications for goal achievement
-      const count = await prisma.application.count({
-        where: {
-          userId,
-          OR: [
-            { status: 'APPLIED' },
-            { status: 'INTERVIEWING' }
-          ],
-          AND: {
+        const nextDate = new Date(date)
+        nextDate.setDate(nextDate.getDate() + 1)
+
+        const count = await prisma.application.count({
+          where: {
+            userId,
             OR: [
-              {
-                appliedDate: {
-                  gte: date,
-                  lt: nextDate
-                }
-              },
-              {
-                AND: [
-                  { appliedDate: null },
-                  {
-                    updatedAt: {
-                      gte: date,
-                      lt: nextDate
-                    }
+              { status: 'APPLIED' },
+              { status: 'INTERVIEWING' }
+            ],
+            AND: {
+              OR: [
+                {
+                  appliedDate: {
+                    gte: date,
+                    lt: nextDate
                   }
-                ]
-              }
-            ]
+                },
+                {
+                  AND: [
+                    { appliedDate: null },
+                    {
+                      updatedAt: {
+                        gte: date,
+                        lt: nextDate
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
           }
-        }
-      })
+        })
 
-      const dayName = dayLabels[date.getDay()]
-      const monthName = monthNames[date.getMonth()]
-      const dayNum = date.getDate()
+        const dayName = dayLabels[date.getDay()]
+        const monthName = monthNames[date.getMonth()]
+        const dayNum = date.getDate()
 
-      dailyStats.push({
-        date: date.toISOString().split('T')[0],
-        count: count,
-        dayLabel: `${dayName}, ${monthName} ${dayNum}`
-      })
+        dailyStats.push({
+          date: date.toISOString().split('T')[0],
+          count: count,
+          dayLabel: dayName + ', ' + monthName + ' ' + dayNum,
+          month: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+        })
+      }
     }
 
     return NextResponse.json({
       userId,
       userName: user.name || user.email?.split('@')[0] || 'User',
-      dailyGoal: 5, // Default goal for now
+      dailyGoal: 5,
       total,
       byStatus: {
         DRAFT: byStatus.DRAFT || 0,

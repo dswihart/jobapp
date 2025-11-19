@@ -67,7 +67,7 @@ export default function Dashboard() {
   const [todayApplicationsCount, setTodayApplicationsCount] = useState(0)
   const [dailyMessage, setDailyMessage] = useState('')
   const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; goalMet: boolean }>>([])
-  const [last7DaysTotal, setLast7DaysTotal] = useState(0)
+  const [last30DaysTotal, setLast30DaysTotal] = useState(0)
   // Restore original line
   // Fetch AI-generated motivational message
   const fetchMotivationalMessage = async () => {
@@ -122,7 +122,7 @@ export default function Dashboard() {
     // Calculate past 7 days goals (using user's daily goal or default to 6)
     const dailyGoal = user?.dailyApplicationGoal || 6
     const goalData = []
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 30; i++) {
       const date = new Date()
       date.setDate(date.getDate() - i)
       const dateStr = getDateString(date)
@@ -144,7 +144,7 @@ export default function Dashboard() {
 
     // Calculate total applications for last 7 days
     const total7Days = goalData.reduce((sum, day) => sum + day.count, 0)
-    setLast7DaysTotal(total7Days)
+    setLast30DaysTotal(total7Days)
   }, [applications, user])
 
   const fetchApplications = async () => {
@@ -390,14 +390,14 @@ Would you like to add this job to your applications?`
                 <ChartBarIcon className="h-6 w-6 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-white">Last 7 Days Total</h2>
+                <h2 className="text-lg font-semibold text-white">Last 30 Days Total</h2>
                 <p className="text-xs text-purple-100">Applications submitted in the past week</p>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-4xl font-bold text-white">{last7DaysTotal}</div>
+              <div className="text-4xl font-bold text-white">{last30DaysTotal}</div>
               <p className="text-sm text-purple-100">
-                {last7DaysTotal === 1 ? 'application' : 'applications'} / {(user?.dailyApplicationGoal || 6) * 7} goal
+                {last30DaysTotal === 1 ? 'application' : 'applications'} / {(user?.dailyApplicationGoal || 6) * 30} goal
               </p>
             </div>
           </div>
@@ -427,10 +427,10 @@ Would you like to add this job to your applications?`
         </div>
       </div>
 
-      {/* Past 7 Days Goals Tracker */}
+      {/* Past 30 Days Goals Tracker */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">Past 7 Days Goal Tracker ({user?.dailyApplicationGoal || 6} applications/day)</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">Past 30 Days Goal Tracker ({user?.dailyApplicationGoal || 6} applications/day)</h3>
           <div className="flex justify-center gap-2">
             {pastDaysGoals.map((day, index) => (
               <div key={index} className="flex flex-col items-center w-24">
