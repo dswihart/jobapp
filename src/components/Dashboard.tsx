@@ -134,7 +134,7 @@ export default function Dashboard() {
       }).length
 
       goalData.push({
-        date: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        date: date.toISOString(),
         count: dayCount,
         goalMet: dayCount >= dailyGoal
       })
@@ -436,10 +436,14 @@ Would you like to add this job to your applications?`
               const dateObj = new Date(day.date)
               const dayNum = dateObj.toLocaleDateString("en-US", { day: "numeric" })
               const monthShort = dateObj.toLocaleDateString("en-US", { month: "short" })
+              const weekday = dateObj.toLocaleDateString("en-US", { weekday: "short" })
               
               return (
                 <div key={index} className={`aspect-square flex flex-col items-center justify-center rounded text-center border ${day.goalMet ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600" : day.count >= 2 ? "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-400 dark:border-yellow-600" : "bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600"}`}>
-                  <div className="text-[8px] text-gray-600 dark:text-gray-400">
+                  <div className="text-[7px] text-gray-600 dark:text-gray-400">
+                    {weekday}
+                  </div>
+                  <div className="text-[7px] text-gray-600 dark:text-gray-400">
                     {monthShort}
                   </div>
                   <div className="text-[10px] font-bold text-gray-900 dark:text-gray-100">
