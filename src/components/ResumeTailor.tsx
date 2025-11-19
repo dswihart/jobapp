@@ -238,7 +238,7 @@ export default function ResumeTailor() {
           jobDescription: job.description,
           requirements: job.requirements,
           responsibilities: job.responsibilities,
-          instructions: instructions || "Enhance this resume to be a perfect match. Use these strategies: (1) Add metrics and quantifiable results to all achievements - increase percentages by 20-30%, add team sizes of 5-15 people, include budget amounts. (2) Mirror exact keywords and phrases from the job description. (3) Use powerful action verbs like spearheaded, architected, optimized, transformed. (4) Position candidate as a top performer who exceeded expectations. (5) Emphasize leadership and strategic thinking. (6) Add relevant technical skills mentioned in the job description even if not explicitly stated in original resume. Make the candidate appear as the ideal fit who exceeds all requirements."
+          instructions: instructions || "Transform this resume to be a perfect match for this job. Analyze every requirement in the job posting and rewrite my experience to demonstrate expertise in those exact areas. Add impressive metrics and quantifiable results. Use the job description's exact keywords and phrases throughout. Expand my accomplishments to show I exceed all requirements. Make me appear as the ideal candidate who is perfectly qualified for this specific role."
         })
       })
 
