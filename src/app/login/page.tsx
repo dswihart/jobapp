@@ -218,7 +218,7 @@ export default function LoginPage() {
       <div className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex justify-between items-center">
-            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-50 flex items-center gap-1">
+            <h1 className="text-xl sm:text-2xl font-bold text-neutral-900 dark:text-neutral-50 flex items-center gap-2">
               <ChartBarIcon className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" />
               Job Application Tracker
             </h1>
@@ -273,109 +273,57 @@ export default function LoginPage() {
           </div>
         </div>
       )}
-      {/* Goal Achievement Section - Last 3 Months Calendar */}
+
+      {/* Goal Achievement Section - Last 30 Days */}
       {displayStats && displayStats.dailyStats && (
         <div className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <div className="text-center mb-3">
               <h2 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-neutral-50">
-                Last 3 Months - Goal Achievement ({dailyGoal} Applications/Day)
+                Last 30 Days - Goal Achievement ({dailyGoal} Applications/Day)
               </h2>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {(() => {
-                const today = new Date()
-                const months = []
-                
-                // Generate 3 months (2 months ago, 1 month ago, current month)
-                for (let monthOffset = 2; monthOffset >= 0; monthOffset--) {
-                  const targetMonth = new Date(today.getFullYear(), today.getMonth() - monthOffset, 1)
-                  const monthName = targetMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" })
-                  const firstDay = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1)
-                  const lastDay = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0)
-                  const startPadding = firstDay.getDay()
-                  const daysInMonth = lastDay.getDate()
+            <div className="max-w-5xl mx-auto">
+              <div className="grid grid-cols-10 gap-1">
+                {displayStats.dailyStats.map((day, index) => {
+                  const date = new Date(day.date)
+                  const dayNum = date.getDate()
+                  const monthShort = date.toLocaleDateString("en-US", { month: "short" })
+                  const count = day.count || 0
+                  const goalMet = count >= dailyGoal
+                  const isToday = date.toDateString() === new Date().toDateString()
                   
-                  const monthData = displayStats.dailyStats.filter(d => {
-                    const date = new Date(d.date)
-                    return date.getMonth() === targetMonth.getMonth() && 
-                           date.getFullYear() === targetMonth.getFullYear()
-                  })
-                  
-                  months.push({
-                    name: monthName,
-                    startPadding,
-                    daysInMonth,
-                    targetMonth,
-                    monthData
-                  })
-                }
-                
-                return months.map((month, monthIdx) => (
-                  <div key={monthIdx} className="bg-neutral-50 dark:bg-neutral-800 rounded-lg p-2">
-                    <h3 className="text-center text-xs font-bold text-neutral-800 dark:text-neutral-200 mb-2">
-                      {month.name}
-                    </h3>
-                    
-                    <div className="grid grid-cols-7 gap-0.5 mb-1">
-                      {["S", "M", "T", "W", "T", "F", "S"].map((day, i) => (
-                        <div key={i} className="text-center text-[9px] font-semibold text-neutral-600 dark:text-neutral-400 py-0.5">
-                          {day}
-                        </div>
-                      ))}
+                  return (
+                    <div
+                      key={day.date}
+                      className={"aspect-square flex flex-col items-center justify-center rounded text-center " + (
+                        isToday 
+                          ? "bg-blue-100 dark:bg-blue-900 border border-blue-500 dark:border-blue-400" 
+                          : goalMet
+                            ? "bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-600"
+                            : "bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-600"
+                      )}
+                    >
+                      <div className="text-[8px] text-neutral-600 dark:text-neutral-400">
+                        {monthShort}
+                      </div>
+                      <div className="text-[10px] font-bold text-neutral-900 dark:text-neutral-100">
+                        {dayNum}
+                      </div>
+                      <div className={"text-[10px] font-bold " + (
+                        goalMet ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
+                      )}>
+                        {count}
+                      </div>
                     </div>
-
-                    <div className="grid grid-cols-7 gap-0.5">
-                      {Array(month.startPadding).fill(null).map((_, i) => (
-                        <div key={"empty-" + i} className="aspect-square rounded bg-neutral-200 dark:bg-neutral-700"></div>
-                      ))}
-                      
-                      {Array(month.daysInMonth).fill(null).map((_, day) => {
-                        const dayNum = day + 1
-                        const date = new Date(month.targetMonth.getFullYear(), month.targetMonth.getMonth(), dayNum)
-                        const dateStr = date.toISOString().split("T")[0]
-                        const dayData = month.monthData.find(d => d.date === dateStr)
-                        const count = dayData?.count || 0
-                        const goalMet = count >= dailyGoal
-                        const isToday = date.toDateString() === today.toDateString()
-                        const isPast = date < today
-                        
-                        return (
-                          <div
-                            key={dayNum}
-                            className={"aspect-square flex flex-col items-center justify-center rounded text-center " + (
-                              isToday 
-                                ? "bg-blue-100 dark:bg-blue-900 border border-blue-500 dark:border-blue-400" 
-                                : isPast
-                                  ? goalMet
-                                    ? "bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-600"
-                                    : "bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-600"
-                                  : "bg-neutral-100 dark:bg-neutral-700 border border-neutral-300 dark:border-neutral-600"
-                            )}
-                          >
-                            <div className="text-[9px] font-bold text-neutral-900 dark:text-neutral-100">
-                              {dayNum}
-                            </div>
-                            {isPast && count > 0 && (
-                              <div className={"text-[8px] font-bold " + (
-                                goalMet ? "text-green-700 dark:text-green-400" : "text-red-700 dark:text-red-400"
-                              )}>
-                                {count}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))
-              })()}
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>
       )}
-
 
       {/* Statistics Section */}
       {displayStats && enhancedMetrics && (

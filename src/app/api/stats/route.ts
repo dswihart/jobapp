@@ -13,37 +13,52 @@ export async function GET() {
     })
 
     const dailyStats = []
-    
-    // Get last 3 months of data
     const today = new Date()
     
-    for (let monthOffset = 2; monthOffset >= 0; monthOffset--) {
-      const targetMonth = new Date(today.getFullYear(), today.getMonth() - monthOffset, 1)
-      const daysInMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate()
+    // Get last 30 days
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)
+      date.setHours(0, 0, 0, 0)
 
-      for (let day = 1; day <= daysInMonth; day++) {
-        const date = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), day)
-        date.setHours(0, 0, 0, 0)
+      const nextDate = new Date(date)
+      nextDate.setDate(nextDate.getDate() + 1)
 
-        const nextDate = new Date(date)
-        nextDate.setDate(nextDate.getDate() + 1)
-
-        const count = await prisma.application.count({
-          where: {
-            appliedDate: {
-              gte: date,
-              lt: nextDate
-            }
+      // Count only APPLIED and INTERVIEWING applications (matching user stats logic)
+      const count = await prisma.application.count({
+        where: {
+          OR: [
+            { status: 'APPLIED' },
+            { status: 'INTERVIEWING' }
+          ],
+          AND: {
+            OR: [
+              {
+                appliedDate: {
+                  gte: date,
+                  lt: nextDate
+                }
+              },
+              {
+                AND: [
+                  { appliedDate: null },
+                  {
+                    updatedAt: {
+                      gte: date,
+                      lt: nextDate
+                    }
+                  }
+                ]
+              }
+            ]
           }
-        })
+        }
+      })
 
-        dailyStats.push({
-          date: date.toISOString().split('T')[0],
-          count: count,
-          dayLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-          month: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-        })
-      }
+      dailyStats.push({
+        date: date.toISOString().split('T')[0],
+        count: count,
+        dayLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      })
     }
 
     const stats = {
