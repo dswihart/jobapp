@@ -1,39 +1,61 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowDownTrayIcon, ArrowPathIcon, ChartBarIcon, CalendarDaysIcon, DocumentTextIcon } from '@heroicons/react/24/outline'
+import { ArrowDownTrayIcon, ArrowPathIcon, ChartBarIcon, CalendarDaysIcon, DocumentTextIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
 interface StatsData {
   overview: {
     totalApplications: number
-    totalInterviews: number
-    totalRejections: number
+    activeApplications: number
+    submitted: number
+    gotResponse: number
+    interviews: number
+    rejections: number
+    pending: number
+    archived: number
+  }
+  rates: {
     responseRate: string
     interviewRate: string
-    avgApplicationsPerWeek: number
-    avgApplicationsPerDay: number
-    firstApplicationDate: string
-    lastApplicationDate: string
+    rejectionRate: string
+    submissionRate: string
   }
-  byStatus: Record<string, number>
+  averages: {
+    applicationsPerDay: number
+    applicationsPerWeek: number
+    avgDaysToResponse: number | null
+    activeDays: number
+    activeWeeks: number
+  }
   recentActivity: {
     last7Days: number
     last30Days: number
+    last90Days: number
   }
-  dailyStats: Array<{
-    date: string
-    added: number
-    applied: number
-    interviewing: number
-    rejected: number
-  }>
+  byStatus: Record<string, number>
+  dateRange: {
+    firstApplication: string | null
+    lastApplication: string | null
+  }
+  funnel: {
+    funnel: Record<string, number>
+    conversionRates: Record<string, number | string>
+    responseMetrics: {
+      avgDaysToResponse: number | null
+      medianDaysToResponse: number | null
+      applicationsWithResponse: number
+      applicationsAwaitingResponse: number
+    }
+    statusBreakdown: Array<{ status: string; count: number; percentage: number }>
+  }
   weeklyStats: Array<{
     weekStart: string
     weekEnd: string
     added: number
     applied: number
     responseRate: number
+    interviewRate: number
   }>
   monthlyStats: Array<{
     month: string
@@ -57,6 +79,7 @@ export default function StatsPage() {
 
   const fetchStats = async () => {
     setLoading(true)
+    setError(null)
     try {
       const response = await fetch(`/api/stats/export?period=${period}&type=summary`)
       const result = await response.json()
@@ -107,12 +130,12 @@ export default function StatsPage() {
   }
 
   const statusColors: Record<string, string> = {
-    DRAFT: 'bg-gray-100 text-gray-800',
-    PENDING: 'bg-purple-100 text-purple-800',
-    APPLIED: 'bg-blue-100 text-blue-800',
-    INTERVIEWING: 'bg-green-100 text-green-800',
-    REJECTED: 'bg-red-100 text-red-800',
-    ARCHIVED: 'bg-yellow-100 text-yellow-800'
+    DRAFT: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+    PENDING: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+    APPLIED: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+    INTERVIEWING: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+    REJECTED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+    ARCHIVED: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
   }
 
   if (loading) {
@@ -129,7 +152,12 @@ export default function StatsPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-red-600">{error}</div>
+        <div className="text-center">
+          <div className="text-red-600 mb-4">{error}</div>
+          <button onClick={fetchStats} className="px-4 py-2 bg-blue-600 text-white rounded-lg">
+            Retry
+          </button>
+        </div>
       </div>
     )
   }
@@ -180,6 +208,13 @@ export default function StatsPage() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={fetchStats}
+              className="ml-auto p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              title="Refresh"
+            >
+              <ArrowPathIcon className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
@@ -194,22 +229,133 @@ export default function StatsPage() {
                 <div className="text-sm text-gray-600 dark:text-gray-400">Total Applications</div>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
+                <div className="text-3xl font-bold text-blue-600">
+                  {stats.overview.submitted}
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">Submitted</div>
+              </div>
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
                 <div className="text-3xl font-bold text-green-600">
-                  {stats.overview.totalInterviews}
+                  {stats.overview.interviews}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Interviews</div>
               </div>
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                <div className="text-3xl font-bold text-blue-600">
-                  {stats.overview.interviewRate}
+                <div className="text-3xl font-bold text-purple-600">
+                  {stats.rates.interviewRate}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">Interview Rate</div>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-                <div className="text-3xl font-bold text-purple-600">
-                  {stats.overview.avgApplicationsPerWeek}
+            </div>
+
+            {/* Key Metrics Row */}
+            <div className="grid md:grid-cols-3 gap-6 mb-6">
+              {/* Activity Stats */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Activity
+                </h2>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Last 7 days</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.recentActivity.last7Days}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Last 30 days</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.recentActivity.last30Days}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Last 90 days</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.recentActivity.last90Days}
+                    </span>
+                  </div>
+                  <hr className="dark:border-gray-700" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Avg per day</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.averages.applicationsPerDay}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Avg per week</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.averages.applicationsPerWeek}
+                    </span>
+                  </div>
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Avg/Week</div>
+              </div>
+
+              {/* Response Metrics */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Response Metrics
+                </h2>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Response Rate</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.rates.responseRate}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Interview Rate</span>
+                    <span className="text-xl font-bold text-green-600">
+                      {stats.rates.interviewRate}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Rejection Rate</span>
+                    <span className="text-xl font-bold text-red-600">
+                      {stats.rates.rejectionRate}
+                    </span>
+                  </div>
+                  <hr className="dark:border-gray-700" />
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Avg days to response</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.averages.avgDaysToResponse ?? 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Awaiting response</span>
+                    <span className="text-xl font-bold text-blue-600">
+                      {stats.funnel?.responseMetrics?.applicationsAwaitingResponse ?? 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Conversion Funnel */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <FunnelIcon className="h-5 w-5" />
+                  Conversion Funnel
+                </h2>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Draft → Submitted</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.funnel?.conversionRates?.draftToApplied ?? 0}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Submitted → Response</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white">
+                      {stats.funnel?.conversionRates?.appliedToResponse ?? 0}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Submitted → Interview</span>
+                    <span className="text-xl font-bold text-green-600">
+                      {stats.funnel?.conversionRates?.appliedToInterview ?? 0}%
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -226,71 +372,21 @@ export default function StatsPage() {
                   >
                     <span className="font-medium">{status}</span>
                     <span className="ml-2 font-bold">{count}</span>
+                    {stats.overview.totalApplications > 0 && (
+                      <span className="ml-1 text-xs opacity-75">
+                        ({Math.round((count / stats.overview.totalApplications) * 100)}%)
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Recent Activity */}
-            <div className="grid md:grid-cols-2 gap-6 mb-6">
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Recent Activity
-                </h2>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Last 7 days</span>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {stats.recentActivity.last7Days}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Last 30 days</span>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {stats.recentActivity.last30Days}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Daily average</span>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {stats.overview.avgApplicationsPerDay}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Response Metrics
-                </h2>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Response Rate</span>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {stats.overview.responseRate}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Interview Rate</span>
-                    <span className="text-2xl font-bold text-green-600">
-                      {stats.overview.interviewRate}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Rejections</span>
-                    <span className="text-2xl font-bold text-red-600">
-                      {stats.overview.totalRejections}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Weekly Trend */}
-            {stats.weeklyStats.length > 0 && (
+            {stats.weeklyStats && stats.weeklyStats.length > 0 && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mb-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Weekly Trend (Last 12 Weeks)
+                  Weekly Trend
                 </h2>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
@@ -300,23 +396,29 @@ export default function StatsPage() {
                         <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-400">Added</th>
                         <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-400">Applied</th>
                         <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-400">Response %</th>
+                        <th className="text-right py-2 px-3 text-gray-600 dark:text-gray-400">Interview %</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {stats.weeklyStats.map((week, idx) => (
-                        <tr key={idx} className="border-b dark:border-gray-700">
+                      {stats.weeklyStats.slice(-12).map((week, idx) => (
+                        <tr key={idx} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                           <td className="py-2 px-3 text-gray-900 dark:text-white">
                             {week.weekStart}
                           </td>
-                          <td className="text-right py-2 px-3 text-gray-900 dark:text-white">
+                          <td className="text-right py-2 px-3 text-gray-900 dark:text-white font-medium">
                             {week.added}
                           </td>
-                          <td className="text-right py-2 px-3 text-gray-900 dark:text-white">
+                          <td className="text-right py-2 px-3 text-blue-600 font-medium">
                             {week.applied}
                           </td>
                           <td className="text-right py-2 px-3">
-                            <span className={week.responseRate > 20 ? 'text-green-600' : 'text-gray-600 dark:text-gray-400'}>
+                            <span className={week.responseRate > 20 ? 'text-green-600 font-medium' : 'text-gray-600 dark:text-gray-400'}>
                               {week.responseRate}%
+                            </span>
+                          </td>
+                          <td className="text-right py-2 px-3">
+                            <span className={week.interviewRate > 10 ? 'text-green-600 font-medium' : 'text-gray-600 dark:text-gray-400'}>
+                              {week.interviewRate}%
                             </span>
                           </td>
                         </tr>
@@ -327,6 +429,14 @@ export default function StatsPage() {
               </div>
             )}
 
+            {/* Date Range Info */}
+            {stats.dateRange.firstApplication && (
+              <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 mb-6 text-sm text-gray-600 dark:text-gray-400">
+                <strong>Date Range:</strong> {stats.dateRange.firstApplication} to {stats.dateRange.lastApplication}
+                {' • '}<strong>Active:</strong> {stats.averages.activeDays} days ({stats.averages.activeWeeks} weeks)
+              </div>
+            )}
+
             {/* Export Section */}
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -334,104 +444,40 @@ export default function StatsPage() {
                 Export Data
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Download your job application data in CSV or JSON format for further analysis.
+                Download your job application data for further analysis.
               </p>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="border dark:border-gray-700 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <DocumentTextIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                    <h3 className="font-medium text-gray-900 dark:text-white">Summary</h3>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {[
+                  { type: 'summary', label: 'Summary', desc: 'Overview stats', icon: DocumentTextIcon },
+                  { type: 'daily', label: 'Daily', desc: 'Day by day', icon: CalendarDaysIcon },
+                  { type: 'weekly', label: 'Weekly', desc: 'Week trends', icon: ChartBarIcon },
+                  { type: 'funnel', label: 'Funnel', desc: 'Conversion data', icon: FunnelIcon },
+                  { type: 'applications', label: 'All Data', desc: 'Full export', icon: DocumentTextIcon }
+                ].map(({ type, label, desc, icon: Icon }) => (
+                  <div key={type} className="border dark:border-gray-700 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Icon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                      <h3 className="font-medium text-gray-900 dark:text-white">{label}</h3>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{desc}</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleExport(type, 'csv')}
+                        disabled={exporting === `${type}-csv`}
+                        className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        {exporting === `${type}-csv` ? '...' : 'CSV'}
+                      </button>
+                      <button
+                        onClick={() => handleExport(type, 'json')}
+                        disabled={exporting === `${type}-json`}
+                        className="flex-1 px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        {exporting === `${type}-json` ? '...' : 'JSON'}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Overview statistics</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleExport('summary', 'csv')}
-                      disabled={exporting === 'summary-csv'}
-                      className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {exporting === 'summary-csv' ? 'Exporting...' : 'CSV'}
-                    </button>
-                    <button
-                      onClick={() => handleExport('summary', 'json')}
-                      disabled={exporting === 'summary-json'}
-                      className="flex-1 px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
-                    >
-                      {exporting === 'summary-json' ? 'Exporting...' : 'JSON'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="border dark:border-gray-700 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <CalendarDaysIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                    <h3 className="font-medium text-gray-900 dark:text-white">Daily Stats</h3>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Day by day breakdown</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleExport('daily', 'csv')}
-                      disabled={exporting === 'daily-csv'}
-                      className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {exporting === 'daily-csv' ? 'Exporting...' : 'CSV'}
-                    </button>
-                    <button
-                      onClick={() => handleExport('daily', 'json')}
-                      disabled={exporting === 'daily-json'}
-                      className="flex-1 px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
-                    >
-                      {exporting === 'daily-json' ? 'Exporting...' : 'JSON'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="border dark:border-gray-700 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ChartBarIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                    <h3 className="font-medium text-gray-900 dark:text-white">Weekly Stats</h3>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Week by week trends</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleExport('weekly', 'csv')}
-                      disabled={exporting === 'weekly-csv'}
-                      className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {exporting === 'weekly-csv' ? 'Exporting...' : 'CSV'}
-                    </button>
-                    <button
-                      onClick={() => handleExport('weekly', 'json')}
-                      disabled={exporting === 'weekly-json'}
-                      className="flex-1 px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
-                    >
-                      {exporting === 'weekly-json' ? 'Exporting...' : 'JSON'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="border dark:border-gray-700 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <DocumentTextIcon className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                    <h3 className="font-medium text-gray-900 dark:text-white">All Applications</h3>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Full application data</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleExport('applications', 'csv')}
-                      disabled={exporting === 'applications-csv'}
-                      className="flex-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {exporting === 'applications-csv' ? 'Exporting...' : 'CSV'}
-                    </button>
-                    <button
-                      onClick={() => handleExport('applications', 'json')}
-                      disabled={exporting === 'applications-json'}
-                      className="flex-1 px-3 py-1.5 text-xs bg-gray-600 text-white rounded hover:bg-gray-700 disabled:opacity-50"
-                    >
-                      {exporting === 'applications-json' ? 'Exporting...' : 'JSON'}
-                    </button>
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
           </>
