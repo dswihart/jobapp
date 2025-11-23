@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { company, role, status, notes, jobUrl, appliedDate } = body
+    const { company, role, status, notes, jobUrl, appliedDate, resumeId, coverLetterId } = body
 
     // Automatically set appliedDate when status is APPLIED or INTERVIEWING
     let finalAppliedDate = appliedDate ? new Date(appliedDate) : null
@@ -57,7 +57,9 @@ export async function POST(request: NextRequest) {
         notes,
         jobUrl,
         appliedDate: finalAppliedDate,
-        userId: session.user.id
+        userId: session.user.id,
+        resumeId: resumeId || null,
+        coverLetterId: coverLetterId || null
       },
       include: {
         resume: true,

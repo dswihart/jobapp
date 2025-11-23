@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-const ARCHIVE_AFTER_DAYS = 45;
+const ARCHIVE_AFTER_DAYS = 30;
 
 export async function GET(request: NextRequest) {
   try {

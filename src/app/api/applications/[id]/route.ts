@@ -21,6 +21,8 @@ export async function GET(
       },
       include: {
         contacts: true,
+        resume: true,
+        coverLetter: true,
         user: true
       }
     })
@@ -49,7 +51,7 @@ export async function PUT(
 
     const { id } = await params
     const body = await request.json()
-    const { company, role, status, notes, jobUrl, appliedDate, createdAt } = body
+    const { company, role, status, notes, jobUrl, appliedDate, createdAt, resumeId, coverLetterId } = body
 
     // First verify the application belongs to this user and get current data
     const existing = await prisma.application.findUnique({
@@ -76,7 +78,9 @@ export async function PUT(
       status,
       notes,
       jobUrl,
-      appliedDate: finalAppliedDate
+      appliedDate: finalAppliedDate,
+      resumeId: resumeId !== undefined ? (resumeId || null) : undefined,
+      coverLetterId: coverLetterId !== undefined ? (coverLetterId || null) : undefined
     }
 
     // Only update createdAt if it's provided
@@ -84,11 +88,20 @@ export async function PUT(
       updateData.createdAt = new Date(createdAt)
     }
 
+    // Remove undefined values
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key]
+      }
+    })
+
     const application = await prisma.application.update({
       where: { id },
       data: updateData,
       include: {
-        contacts: true
+        contacts: true,
+        resume: true,
+        coverLetter: true
       }
     })
 

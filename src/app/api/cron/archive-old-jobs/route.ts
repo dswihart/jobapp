@@ -3,16 +3,16 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET() {
   try {
-    // Calculate date 45 days ago
-    const fortyFiveDaysAgo = new Date()
-    fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45)
+    // Calculate date 30 days ago
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
-    // Archive applications that are REJECTED and older than 45 days
+    // Archive applications that are REJECTED and older than 30 days
     const archivedRejected = await prisma.application.updateMany({
       where: {
         status: 'REJECTED',
         updatedAt: {
-          lt: fortyFiveDaysAgo
+          lt: thirtyDaysAgo
         }
       },
       data: {
@@ -20,12 +20,12 @@ export async function GET() {
       }
     })
 
-    // Also archive DRAFT applications older than 45 days
+    // Also archive DRAFT applications older than 30 days
     const archivedDrafts = await prisma.application.updateMany({
       where: {
         status: 'DRAFT',
         createdAt: {
-          lt: fortyFiveDaysAgo
+          lt: thirtyDaysAgo
         }
       },
       data: {

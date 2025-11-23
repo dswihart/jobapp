@@ -60,6 +60,39 @@ async function fetchJobDescription(url: string): Promise<string> {
   }
 }
 
+
+// GET /api/cover-letter - List all cover letters for the current user
+export async function GET() {
+  try {
+    const session = await auth()
+    
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 }
+      )
+    }
+
+    const coverLetters = await prisma.coverLetter.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        name: true,
+        createdAt: true
+      }
+    })
+
+    return NextResponse.json(coverLetters)
+  } catch (error) {
+    console.error("Error fetching cover letters:", error)
+    return NextResponse.json(
+      { error: "Failed to fetch cover letters" },
+      { status: 500 }
+    )
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()

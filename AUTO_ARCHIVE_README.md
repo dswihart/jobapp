@@ -1,10 +1,10 @@
 # Automatic Job Archiving Feature
 
 ## Overview
-Jobs are automatically archived after 45 days to keep your active job list clean and organized.
+Jobs are automatically archived after 30 days to keep your active job list clean and organized.
 
 ## How It Works
-- **Archive Trigger:** Applications older than 45 days are automatically moved to ARCHIVED status
+- **Archive Trigger:** Applications older than 30 days are automatically moved to ARCHIVED status
 - **Schedule:** Runs daily at 2:00 AM server time
 - **Based On:** Uses  if available, otherwise uses  date
 
@@ -47,7 +47,7 @@ To change the archive period, edit:
 
 Change this line:
 ```typescript
-const ARCHIVE_AFTER_DAYS = 45; // Modify this number
+const ARCHIVE_AFTER_DAYS = 30; // Modify this number
 ```
 
 Then rebuild and restart:

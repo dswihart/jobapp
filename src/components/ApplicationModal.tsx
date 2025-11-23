@@ -13,6 +13,10 @@ interface Application {
   appliedDate?: string
   createdAt: string
   updatedAt: string
+  resumeId?: string
+  coverLetterId?: string
+  resume?: Resume
+  coverLetter?: CoverLetter
   contacts: Contact[]
 }
 
@@ -23,6 +27,18 @@ interface Contact {
   email?: string
   phone?: string
   notes?: string
+}
+
+interface Resume {
+  id: string
+  name: string
+  fileName: string
+  isPrimary: boolean
+}
+
+interface CoverLetter {
+  id: string
+  name: string
 }
 
 interface ApplicationModalProps {
@@ -49,8 +65,53 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
     notes: '',
     jobUrl: '',
     appliedDate: '',
-    createdAt: ''
+    createdAt: '',
+    resumeId: '',
+    coverLetterId: ''
   })
+
+  const [resumes, setResumes] = useState<Resume[]>([])
+  const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([])
+  const [loadingResumes, setLoadingResumes] = useState(false)
+  const [loadingCoverLetters, setLoadingCoverLetters] = useState(false)
+
+  // Fetch resumes and cover letters when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchResumes()
+      fetchCoverLetters()
+    }
+  }, [isOpen])
+
+  const fetchResumes = async () => {
+    setLoadingResumes(true)
+    try {
+      const response = await fetch('/api/resumes')
+      if (response.ok) {
+        const data = await response.json()
+        setResumes(Array.isArray(data.resumes) ? data.resumes : (Array.isArray(data) ? data : []))
+      }
+    } catch (error) {
+      console.error('Failed to fetch resumes:', error)
+    } finally {
+      setLoadingResumes(false)
+    }
+  }
+
+  const fetchCoverLetters = async () => {
+    setLoadingCoverLetters(true)
+    try {
+      const response = await fetch('/api/cover-letter')
+      if (response.ok) {
+        const data = await response.json()
+        setCoverLetters(Array.isArray(data) ? data : [])
+      }
+    } catch (error) {
+      console.error('Failed to fetch cover letters:', error)
+    } finally {
+      setLoadingCoverLetters(false)
+    }
+  }
 
   useEffect(() => {
     if (application) {
@@ -61,10 +122,11 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
         notes: application.notes || '',
         jobUrl: application.jobUrl || '',
         appliedDate: application.appliedDate ? application.appliedDate.split('T')[0] : '',
-        createdAt: application.createdAt ? application.createdAt.split('T')[0] : ''
+        createdAt: application.createdAt ? application.createdAt.split('T')[0] : '',
+        resumeId: application.resumeId || '',
+        coverLetterId: application.coverLetterId || ''
       })
     } else {
-      // For new applications, default to today's date
       const today = new Date().toISOString().split('T')[0]
       setFormData({
         company: '',
@@ -73,7 +135,9 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
         notes: '',
         jobUrl: '',
         appliedDate: '',
-        createdAt: today
+        createdAt: today,
+        resumeId: '',
+        coverLetterId: ''
       })
     }
   }, [application, isOpen])
@@ -95,18 +159,14 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
-      {/* Mobile-optimized layout */}
       <div className="flex min-h-screen items-end sm:items-center justify-center p-0 sm:p-4">
-        {/* Backdrop */}
         <div
           className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-80 transition-opacity"
           onClick={onClose}
         ></div>
 
-        {/* Modal - slides up on mobile, centered on desktop */}
         <div className="relative bg-white dark:bg-gray-800 rounded-t-2xl sm:rounded-lg shadow-xl w-full sm:max-w-md sm:w-full max-h-[90vh] sm:max-h-[85vh] flex flex-col animate-slide-up sm:animate-none">
 
-          {/* Header - sticky on mobile */}
           <div className="sticky top-0 bg-white dark:bg-gray-800 flex items-center justify-between p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 rounded-t-2xl sm:rounded-t-lg z-10">
             <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
               {application ? 'Edit Application' : 'Add Application'}
@@ -120,11 +180,9 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
             </button>
           </div>
 
-          {/* Form - scrollable content */}
           <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-5">
 
-              {/* Company */}
               <div>
                 <label htmlFor="company" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Company <span className="text-red-500">*</span>
@@ -141,7 +199,6 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                 />
               </div>
 
-              {/* Role */}
               <div>
                 <label htmlFor="role" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Role <span className="text-red-500">*</span>
@@ -158,7 +215,6 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                 />
               </div>
 
-              {/* Status */}
               <div>
                 <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Status
@@ -178,7 +234,54 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                 </select>
               </div>
 
-              {/* Created Date - NEW FIELD */}
+              <div>
+                <label htmlFor="resumeId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Resume
+                </label>
+                <select
+                  id="resumeId"
+                  name="resumeId"
+                  value={formData.resumeId}
+                  onChange={handleChange}
+                  disabled={loadingResumes}
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors disabled:opacity-50"
+                >
+                  <option value="">-- No Resume --</option>
+                  {resumes.map(resume => (
+                    <option key={resume.id} value={resume.id}>
+                      {resume.name} {resume.isPrimary ? '(Primary)' : ''}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Attach a resume to this application
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="coverLetterId" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  Cover Letter
+                </label>
+                <select
+                  id="coverLetterId"
+                  name="coverLetterId"
+                  value={formData.coverLetterId}
+                  onChange={handleChange}
+                  disabled={loadingCoverLetters}
+                  className="w-full px-3 sm:px-4 py-2.5 sm:py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white transition-colors disabled:opacity-50"
+                >
+                  <option value="">-- No Cover Letter --</option>
+                  {coverLetters.map(letter => (
+                    <option key={letter.id} value={letter.id}>
+                      {letter.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Attach a cover letter to this application
+                </p>
+              </div>
+
               <div>
                 <label htmlFor="createdAt" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Created Date
@@ -196,7 +299,6 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                 </p>
               </div>
 
-              {/* Applied Date */}
               <div>
                 <label htmlFor="appliedDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Applied Date
@@ -211,7 +313,6 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                 />
               </div>
 
-              {/* Job URL */}
               <div>
                 <label htmlFor="jobUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Job URL
@@ -227,7 +328,6 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                 />
               </div>
 
-              {/* Notes */}
               <div>
                 <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   Notes
@@ -244,7 +344,6 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
               </div>
             </div>
 
-            {/* Footer - sticky on mobile */}
             <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 sm:p-6 flex flex-col-reverse sm:flex-row justify-end gap-3 rounded-b-2xl sm:rounded-b-lg">
               <button
                 type="button"

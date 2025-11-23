@@ -281,7 +281,7 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                     <span className="text-gray-400 dark:text-gray-500">-</span>
                   )}
                 </div>
-                  <div>👥 Contacts: {application.contacts.length}</div>
+                  <div>👥 Contacts: {(application.contacts?.length || 0)}</div>
                   {application.resume && (
                     <div>📄 Resume: <a href={application.resume.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">{application.resume.name}</a></div>
                   )}
@@ -351,7 +351,7 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                   )}
                 </div>
                 <div className="text-gray-500 dark:text-gray-400">
-                  {application.contacts.length} contact{application.contacts.length !== 1 ? 's' : ''}
+                  {(application.contacts?.length || 0)} contact{(application.contacts?.length || 0) !== 1 ? 's' : ''}
                 </div>
                 <div className="flex space-x-2">
                   <button
@@ -412,11 +412,11 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                   </a>
                 </div>
               )}
-              {application.contacts.length > 0 && (
+              {(application.contacts && (application.contacts?.length || 0) > 0) && (
                 <div className="mt-3 pl-4 border-l-2 border-green-200">
                   <div className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">CONTACTS:</div>
                   <div className="space-y-2">
-                    {application.contacts.map((contact) => (
+                    {application.contacts?.map((contact) => (
                       <div key={contact.id} className="text-sm bg-gray-50 dark:bg-gray-800 rounded p-2">
                         <div className="font-medium text-gray-900 dark:text-white">{contact.name}</div>
                         {contact.title && <div className="text-gray-600 dark:text-gray-400 text-xs">{contact.title}</div>}

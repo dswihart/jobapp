@@ -73,7 +73,7 @@ The goal is to make the hiring manager think "This person is EXACTLY what we nee
 Return only the enhanced resume content, formatted professionally.`
 
       const message = await anthropic.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-sonnet-4-5',
         max_tokens: 4000,
         temperature: 0.8,
         system: systemPrompt,
