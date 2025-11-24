@@ -75,7 +75,7 @@ Return only the enhanced resume content, formatted professionally.`
       const message = await anthropic.messages.create({
         model: 'claude-sonnet-4-5',
         max_tokens: 4000,
-        temperature: 0.8,
+        temperature: 1.0,
         system: systemPrompt,
         messages: [
           {
