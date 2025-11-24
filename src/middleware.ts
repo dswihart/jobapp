@@ -6,9 +6,10 @@ export default auth((req) => {
   const isOnLoginPage = req.nextUrl.pathname.startsWith('/login')
   const isOnRegisterPage = req.nextUrl.pathname.startsWith('/register')
   const isOnAuthApi = req.nextUrl.pathname.startsWith('/api/auth')
+  const isOnMobileApi = req.nextUrl.pathname.startsWith('/api/mobile')
 
   // Allow access to auth pages and APIs
-  if (isOnLoginPage || isOnRegisterPage || isOnAuthApi) {
+  if (isOnLoginPage || isOnRegisterPage || isOnAuthApi || isOnMobileApi) {
     return NextResponse.next()
   }
 
@@ -21,5 +22,5 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ['/((?!_next|.*\..*).*)'],
+  matcher: ['/((?!_next|.*\\..*).*)'],
 }
