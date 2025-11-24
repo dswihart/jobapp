@@ -3,7 +3,7 @@ import { DocumentTextIcon, SparklesIcon } from '@heroicons/react/24/outline'
 
 import { useState, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
-import { PlusIcon, ChartBarIcon, ViewColumnsIcon, ListBulletIcon, ArrowRightOnRectangleIcon, LinkIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, ChartBarIcon, ViewColumnsIcon, AcademicCapIcon, ListBulletIcon, ArrowRightOnRectangleIcon, LinkIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import ApplicationList from './ApplicationList'
 import ApplicationBoard from './ApplicationBoard'
 import ProgressChart from './ProgressChart'
@@ -339,7 +339,7 @@ Would you like to add this job to your applications?`
                   <span className="hidden sm:inline">Resume Tailor</span>
                   <span className="sm:hidden">Tailor</span>
                 </a>
-<a                  href="/stats"                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"                >                  <ChartBarIcon className="h-4 w-4 sm:h-5 sm:w-5" />                  <span className="hidden sm:inline">Statistics</span>                  <span className="sm:hidden">Stats</span>                </a>
+<a                  href="/stats"                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"                >                  <ChartBarIcon className="h-4 w-4 sm:h-5 sm:w-5" />                  <span className="hidden sm:inline">Statistics</span>                  <span className="sm:hidden">Stats</span></a><a href="/skills" className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"><AcademicCapIcon className="h-4 w-4 sm:h-5 sm:w-5" /><span className="hidden sm:inline">Skills</span><span className="sm:hidden">Skills</span></a>
                 <button
                   onClick={() => setIsProfileModalOpen(true)}
                   className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-sm sm:text-base"
