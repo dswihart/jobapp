@@ -3,6 +3,31 @@ import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await context.params
+
+    const opportunity = await prisma.jobOpportunity.findUnique({
+      where: { id }
+    })
+
+    if (!opportunity) {
+      return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, opportunity })
+
+  } catch (error) {
+    console.error('Error fetching opportunity:', error)
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : 'Failed to fetch opportunity'
+    }, { status: 500 })
+  }
+}
+
 export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> }
