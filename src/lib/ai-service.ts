@@ -1,9 +1,10 @@
 /**
  * Enhanced AI Job Matching Service
- * Uses detailed user profile and LLM for better matching
+ * Uses detailed user profile, LLM, and skill database for better matching
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { prisma } from './prisma'
 
 // Export basic interfaces for backward compatibility
 export interface UserProfile {
@@ -59,10 +60,70 @@ interface EnhancedFitScore {
   recommendations: string[]
   strengths: string[]
   concerns: string[]
+  skillDemandInfo?: {
+    highDemandMatches: string[]
+    trendingSkillsNeeded: string[]
+  }
 }
 
 /**
- * Enhanced AI matching using Claude
+ * Get skill demand information from the database
+ */
+async function getSkillDemandContext(userSkills: string[]): Promise<{
+  userSkillsWithDemand: Array<{ name: string; frequency: number; trend: string }>
+  topDemandSkills: Array<{ name: string; frequency: number; trend: string }>
+}> {
+  try {
+    const normalizedUserSkills = userSkills.map(s => s.toLowerCase().trim())
+
+    // Get user's skills with their demand data
+    const userSkillsData = await prisma.skill.findMany({
+      where: {
+        OR: [
+          { normalizedName: { in: normalizedUserSkills } },
+          { aliases: { hasSome: normalizedUserSkills } }
+        ]
+      },
+      select: {
+        name: true,
+        frequency: true,
+        demandTrend: true
+      },
+      orderBy: { frequency: 'desc' }
+    })
+
+    // Get top demand skills overall
+    const topDemand = await prisma.skill.findMany({
+      where: { frequency: { gte: 3 } },
+      orderBy: { frequency: 'desc' },
+      take: 20,
+      select: {
+        name: true,
+        frequency: true,
+        demandTrend: true
+      }
+    })
+
+    return {
+      userSkillsWithDemand: userSkillsData.map(s => ({
+        name: s.name,
+        frequency: s.frequency,
+        trend: s.demandTrend
+      })),
+      topDemandSkills: topDemand.map(s => ({
+        name: s.name,
+        frequency: s.frequency,
+        trend: s.demandTrend
+      }))
+    }
+  } catch (error) {
+    console.error('Error fetching skill demand context:', error)
+    return { userSkillsWithDemand: [], topDemandSkills: [] }
+  }
+}
+
+/**
+ * Enhanced AI matching using Claude with skill database integration
  */
 export async function analyzeJobFitEnhanced(
   userProfile: EnhancedUserProfile,
@@ -71,12 +132,33 @@ export async function analyzeJobFitEnhanced(
   const apiKey = process.env.ANTHROPIC_API_KEY
 
   if (!apiKey) {
-    // Fallback to basic matching if no API key
     return fallbackMatching(userProfile, jobDescription)
   }
 
   try {
     const anthropic = new Anthropic({ apiKey })
+
+    // Get skill demand context from database
+    const allUserSkills = [
+      ...userProfile.primarySkills,
+      ...userProfile.secondarySkills,
+      ...userProfile.learningSkills
+    ]
+    const skillContext = await getSkillDemandContext(allUserSkills)
+
+    // Build skill demand context for the prompt
+    let skillDemandSection = ''
+    if (skillContext.userSkillsWithDemand.length > 0) {
+      const highDemand = skillContext.userSkillsWithDemand.filter(s => s.frequency >= 5)
+      const rising = skillContext.userSkillsWithDemand.filter(s => s.trend === 'rising')
+
+      skillDemandSection = `
+**Skill Market Demand (from job database):**
+- Candidate's High-Demand Skills: ${highDemand.map(s => `${s.name} (${s.frequency} mentions)`).join(', ') || 'None tracked yet'}
+- Candidate's Rising Skills: ${rising.map(s => s.name).join(', ') || 'None'}
+- Top In-Demand Skills in Market: ${skillContext.topDemandSkills.slice(0, 10).map(s => s.name).join(', ')}
+`
+    }
 
     const prompt = `You are an expert career advisor and job matching AI. Analyze how well this SPECIFIC candidate matches the job posting.
 
@@ -102,7 +184,7 @@ export async function analyzeJobFitEnhanced(
 - **Work Preference (LOCATION CONSTRAINT)**: ${userProfile.workPreference || 'Not specified'}
 - **Preferred Countries/Locations (LOCATION FILTER)**: ${userProfile.preferredCountries?.join(", ") || "Any"}
 - Professional Summary: ${userProfile.summary || 'Not provided'}
-
+${skillDemandSection}
 **Job Posting:**
 Title: ${jobDescription.title}
 Company: ${jobDescription.company}
@@ -125,11 +207,13 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
   "industryMatch": 0-100,
   "locationMatch": 0-100,
   "reasoning": "2-3 sentences explaining the overall match quality",
-  "matchedSkills": ["Skills from their profile that match the job"],
+  "matchedSkills": ["Skills from their profile that match the job - be comprehensive"],
   "missingSkills": ["Required skills they don't have or need to improve"],
   "recommendations": ["Specific advice for applying or improving candidacy"],
   "strengths": ["Their key advantages for this role"],
-  "concerns": ["Potential weaknesses or gaps to address"]
+  "concerns": ["Potential weaknesses or gaps to address"],
+  "highDemandMatches": ["Which of their matching skills are high-demand in the market"],
+  "trendingSkillsNeeded": ["Trending skills from the job they should consider learning"]
 }
 
 **Scoring Guidelines:**
@@ -139,33 +223,33 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 - titleMatch: Job title relevance to candidate's background (exact=100, related field=85, adjacent=70, transferable=55, growth=50)
 - industryMatch: Industry compatibility (same=100, adjacent=85, transferable=70, new field with relevant skills=55)
 - locationMatch: Location compatibility based on preferences
-  * 100: Remote/Worldwide OR matches preferredCountries (Barcelona/Spain for European candidates)
+  * 100: Remote/Worldwide OR matches preferredCountries
   * 85: Same region as preferredCountries
   * 70: Offers relocation to preferredCountries
   * 50: Remote option available
   * 30: Different location but role is exceptional fit
+  * 0: Non-remote USA/Asia/etc. when candidate needs Europe/Remote
 - overall: Balanced scoring emphasizing potential and transferability
 
 **Overall Formula - Emphasize Skills & Growth:**
-- Core Capabilities: 55% (skills 40% + experience 15%) - focus on what they can do
-- Role Alignment: 30% (title 20% + seniority 10%) - consider transferable experience
-- Context Fit: 15% (location 10% + industry 5%) - be flexible on context
+- Core Capabilities: 55% (skills 40% + experience 15%)
+- Role Alignment: 30% (title 20% + seniority 10%)
+- Context Fit: 15% (location 10% + industry 5%)
 
 **Matching Philosophy - Be Encouraging:**
 - Recognize transferable skills (security→cloud security, backend→fullstack, etc.)
 - Value learning trajectory and secondary skills heavily
-- Consider career growth and stretch opportunities (mid→senior roles)
+- Consider career growth and stretch opportunities
 - Tech skills are highly transferable (AWS↔Azure, React↔Vue, Python↔Go)
 - Don't penalize for keyword mismatches if core skills align
-- Remote jobs = high location score for everyone
-- Barcelona/Spain = high score for European candidates
 - Focus on "Can they succeed?" not "Perfect keyword match?"
-- If someone has 70%+ of core skills, that's a strong match even without exact title
+- If someone has 70%+ of core skills, that's a strong match
 
 **Important:**
 - Be realistic but encouraging
 - Highlight transferable skills
 - Consider career growth opportunities
+- Note which skills are high-demand in the current market
 - Return ONLY valid JSON, no markdown or extra text`
 
     const message = await anthropic.messages.create({
@@ -189,7 +273,7 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
       throw new Error('Failed to extract JSON from response')
     }
 
-    const result: EnhancedFitScore = JSON.parse(jsonMatch[0])
+    const result = JSON.parse(jsonMatch[0])
 
     // Validate and ensure all fields present
     return {
@@ -205,7 +289,11 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
       missingSkills: result.missingSkills || [],
       recommendations: result.recommendations || [],
       strengths: result.strengths || [],
-      concerns: result.concerns || []
+      concerns: result.concerns || [],
+      skillDemandInfo: {
+        highDemandMatches: result.highDemandMatches || [],
+        trendingSkillsNeeded: result.trendingSkillsNeeded || []
+      }
     }
 
   } catch (error) {
@@ -215,18 +303,24 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
 }
 
 /**
- * Fallback matching if AI unavailable
+ * Fallback matching if AI unavailable - now with skill database
  */
-function fallbackMatching(
+async function fallbackMatching(
   userProfile: EnhancedUserProfile,
   jobDescription: JobDescription
-): EnhancedFitScore {
+): Promise<EnhancedFitScore> {
   const jobText = `${jobDescription.title} ${jobDescription.description} ${jobDescription.requirements || ''}`.toLowerCase()
 
   // Skill matching
   const allSkills = [...userProfile.primarySkills, ...userProfile.secondarySkills, ...userProfile.learningSkills]
   const matchedSkills = allSkills.filter(skill => jobText.includes(skill.toLowerCase()))
   const skillMatch = allSkills.length > 0 ? Math.round((matchedSkills.length / allSkills.length) * 100) : 0
+
+  // Get skill demand info
+  const skillContext = await getSkillDemandContext(matchedSkills)
+  const highDemandMatches = skillContext.userSkillsWithDemand
+    .filter(s => s.frequency >= 5)
+    .map(s => s.name)
 
   // Experience matching
   const experienceMatch = userProfile.yearsOfExperience ? Math.min(100, userProfile.yearsOfExperience * 10) : 50
@@ -239,54 +333,47 @@ function fallbackMatching(
     seniorityMatch = (isSeniorRole === isSeniorCandidate) ? 100 : 60
   }
 
-  // Title matching - VERY strict matching for job titles
-  let titleMatch = 10 // Default very low score if no match
+  // Title matching
+  let titleMatch = 10
   if (userProfile.jobTitles && userProfile.jobTitles.length > 0) {
     for (const preferredTitle of userProfile.jobTitles) {
       const titleLower = preferredTitle.toLowerCase()
       const jobTitleLower = jobDescription.title.toLowerCase()
 
-      // Exact or very close match
       if (jobTitleLower.includes(titleLower) || titleLower.includes(jobTitleLower)) {
         titleMatch = 100
         break
       }
 
-      // Extract MEANINGFUL words (skip generic terms like "engineer", "specialist")
       const genericWords = ['engineer', 'specialist', 'analyst', 'manager', 'developer', 'consultant', 'senior', 'junior', 'lead', 'principal']
       const titleWords = titleLower.split(' ').filter(w => w.length > 3 && !genericWords.includes(w))
-
-      // Job must contain specific domain keywords (security, dlp, storage, etc.)
       const matchedWords = titleWords.filter(word => jobTitleLower.includes(word))
 
-      // Only match if specific domain keywords match
       if (matchedWords.length > 0 && matchedWords.length >= titleWords.length * 0.8) {
         titleMatch = Math.max(titleMatch, 85)
       } else if (matchedWords.length > 0 && matchedWords.length >= titleWords.length * 0.5) {
         titleMatch = Math.max(titleMatch, 50)
       } else {
-        // Check if it's a completely different role
         const wrongRoles = ['data engineer', 'software engineer', 'devops', 'qa', 'legal', 'sales', 'marketing', 'hr', 'product manager']
         for (const wrongRole of wrongRoles) {
           if (jobTitleLower.includes(wrongRole)) {
-            titleMatch = Math.min(titleMatch, 15) // Cap at 15% for wrong roles
+            titleMatch = Math.min(titleMatch, 15)
             break
           }
         }
       }
     }
   } else {
-    titleMatch = 50 // Neutral if no preferred titles specified
+    titleMatch = 50
   }
 
-  // Overall weighted - increase title importance
   const overall = Math.round(
     skillMatch * 0.30 +
     experienceMatch * 0.20 +
     seniorityMatch * 0.10 +
-    titleMatch * 0.30 + // Increased from 15% to 30%
-    50 * 0.05 + // industry
-    50 * 0.05   // location
+    titleMatch * 0.30 +
+    50 * 0.05 +
+    50 * 0.05
   )
 
   return {
@@ -302,11 +389,15 @@ function fallbackMatching(
     missingSkills: [],
     recommendations: ['Review the job requirements carefully', 'Highlight your matching skills in your application'],
     strengths: matchedSkills.slice(0, 3),
-    concerns: []
+    concerns: [],
+    skillDemandInfo: {
+      highDemandMatches,
+      trendingSkillsNeeded: []
+    }
   }
 }
 
-// Backward compatibility - keep old interface working
+// Backward compatibility
 export async function analyzeJobFit(
   userProfile: {
     skills: string[]
@@ -317,7 +408,6 @@ export async function analyzeJobFit(
   },
   jobDescription: JobDescription
 ): Promise<{ overall: number, skillMatch: number, experienceMatch: number, keywords: string[], matchedSkills: string[], missingSkills: string[], recommendations: string[] }> {
-  // Convert to enhanced profile - preserve all user data
   const enhanced: EnhancedUserProfile = {
     primarySkills: userProfile.skills || [],
     secondarySkills: userProfile.secondarySkills || [],

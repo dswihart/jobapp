@@ -9,6 +9,7 @@ import { calculateRejectionPenalty } from './pattern-learning-service'
 import { getEnabledSources } from './sources'
 
 import { fetchFromUserSources } from './user-sources-fetcher'
+import { extractSkillsFromJob, saveSkillsToDatabase } from './skill-service'
 
 /**
  * DEPRECATED: Location filtering now handled by AI based on user preferences
@@ -217,6 +218,10 @@ export async function monitorJobBoards(userId: string): Promise<number> {
           }
         })
 
+        // Extract and save skills to database asynchronously
+        extractSkillsFromJob(job.description, job.title, job.company, job.requirements)
+          .then(result => saveSkillsToDatabase(result, job.jobUrl))
+          .catch(err => console.error("[Job Monitor] Skill extraction error:", err))
         console.log(`[Job Monitor] Added job: ${job.title} (${fitScore.overall}% fit)`)
         addedCount++
       }

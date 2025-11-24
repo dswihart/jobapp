@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { analyzeJobFitEnhanced } from '@/lib/ai-service'
+import { extractSkillsFromJob, saveSkillsToDatabase } from '@/lib/skill-service'
 
 // CORS headers for bookmarklet cross-origin requests
 const corsHeaders = {
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
     })
 
     let fitScore = null
+    let extractedSkills: string[] = []
 
     // Calculate fit score if we have user skills and job description
     if (user?.skills && description) {
@@ -57,10 +59,24 @@ export async function POST(request: NextRequest) {
         }, user)
 
         fitScore = jobFit.overall
+        extractedSkills = jobFit.matchedSkills || []
         console.log(`[Parse Job Data] Fit score: ${fitScore}%`)
       } catch (error) {
         console.error('[Parse Job Data] Error calculating fit score:', error)
       }
+    }
+
+    // Extract and save skills to the skill database (async, don't wait)
+    if (description) {
+      extractSkillsFromJob(description, role, company, requirements)
+        .then(result => {
+          saveSkillsToDatabase(result, url)
+            .then(saved => {
+              console.log(`[Parse Job Data] Skills extracted: ${saved.savedCount} new, ${saved.updatedCount} updated`)
+            })
+            .catch(err => console.error('[Parse Job Data] Error saving skills:', err))
+        })
+        .catch(err => console.error('[Parse Job Data] Error extracting skills:', err))
     }
 
     // Build notes content
@@ -86,6 +102,12 @@ export async function POST(request: NextRequest) {
       notesContent.push(`Job URL: ${url}`)
     }
 
+    // Add extracted skills to notes for reference
+    if (extractedSkills.length > 0) {
+      notesContent.push('')
+      notesContent.push(`Matched Skills: ${extractedSkills.join(', ')}`)
+    }
+
     // Create application
     const application = await prisma.application.create({
       data: {
@@ -95,7 +117,6 @@ export async function POST(request: NextRequest) {
         status: 'DRAFT',
         jobUrl: url,
         notes: notesContent.join('\n'),
-        fitScore: fitScore,
         createdAt: new Date()
       }
     })
@@ -106,6 +127,7 @@ export async function POST(request: NextRequest) {
       success: true,
       application,
       fitScore,
+      extractedSkills,
       message: 'Job added successfully'
     }, { headers: corsHeaders })
   } catch (error) {
