@@ -65,6 +65,7 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
   const [statusFilter, setStatusFilter] = useState<'ALL' | Application['status']>('ALL')
   const [sortField, setSortField] = useState<SortField>('createdAt')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [searchTerm, setSearchTerm] = useState('')
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -133,9 +134,17 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
     )
   }
 
-  const filteredApplications = statusFilter === 'ALL'
-    ? applications
-    : applications.filter(app => app.status === statusFilter)
+  const filteredApplications = applications
+    .filter(app => statusFilter === 'ALL' || app.status === statusFilter)
+    .filter(app => {
+      if (!searchTerm) return true
+      const searchLower = searchTerm.toLowerCase()
+      return (
+        app.company.toLowerCase().includes(searchLower) ||
+        app.role.toLowerCase().includes(searchLower) ||
+        (app.notes && app.notes.toLowerCase().includes(searchLower))
+      )
+    })
 
   const sortedApplications = [...filteredApplications].sort((a, b) => {
     let aValue: any = a[sortField]
@@ -171,9 +180,17 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
   return (
     <>
       <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Search Input */}
+          <input
+            type="text"
+            placeholder="Search applications..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-64 px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          />
           <label htmlFor="statusFilter" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            Filter by Status:
+            Status:
           </label>
           <select
             id="statusFilter"

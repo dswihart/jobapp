@@ -38,8 +38,18 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
   const [minFitScore, setMinFitScore] = useState(0)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set())
   const [applyingJob, setApplyingJob] = useState<string | null>(null)
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
 
   useEffect(() => {
     loadJobs()
@@ -213,6 +223,12 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   const filteredJobs = jobs
     .filter(job => filter === 'all' || !job.isRead)
     .filter(job => job.fitScore >= minFitScore)
+    .filter(job => {
+      if (!debouncedSearch) return true
+      const searchLower = debouncedSearch.toLowerCase()
+      const searchableText = [job.title, job.company, job.description, job.location].filter(Boolean).join(' ').toLowerCase()
+      return searchableText.includes(searchLower)
+    })
     .sort((a, b) => b.fitScore - a.fitScore)
 
   const getFitScoreColor = (score: number) => {
@@ -276,6 +292,17 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
             >
               New ({jobs.filter(j => !j.isRead).length})
             </button>
+          </div>
+
+          {/* Search Input */}
+          <div className="flex-1 max-w-md">
+            <input
+              type="text"
+              placeholder="Search jobs..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w.full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
           <div className="flex items-center gap-2 ml-auto">
