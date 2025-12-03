@@ -10,7 +10,7 @@ const client = new Anthropic({
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { url } = body
+    let { url } = body
 
     if (!url) {
       return NextResponse.json(
@@ -19,12 +19,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Clean up the URL - trim whitespace
+    url = url.trim()
+    
+    // Add https:// if no protocol specified
+    if (!url.match(/^https?:\/\//i)) {
+      url = 'https://' + url
+    }
+
     // Validate URL
     try {
       new URL(url)
     } catch {
       return NextResponse.json(
-        { error: 'Invalid URL format' },
+        { error: 'Invalid URL format. Please enter a valid URL like https://example.com/job' },
         { status: 400 }
       )
     }
