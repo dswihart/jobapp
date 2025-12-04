@@ -42,6 +42,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set())
   const [applyingJob, setApplyingJob] = useState<string | null>(null)
+  const [draftingJob, setDraftingJob] = useState<string | null>(null)
 
   // Debounce search input
   useEffect(() => {
@@ -124,6 +125,8 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   }
 
   const handleMoveToDraft = async (job: JobOpportunity) => {
+    if (draftingJob) return // Prevent double-click
+    setDraftingJob(job.id)
     try {
       const response = await fetch('/api/applications/create-from-job', {
         method: 'POST',
@@ -162,6 +165,8 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
     } catch (error) {
       console.error('Error creating draft:', error)
       alert('Error creating draft')
+    } finally {
+      setDraftingJob(null)
     }
   }
 
@@ -399,10 +404,11 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
                         )}
                         <button
                           onClick={() => handleMoveToDraft(job)}
-                          className="flex-shrink-0 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm"
+                          disabled={draftingJob === job.id}
+                          className="flex-shrink-0 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Move to draft applications"
                         >
-                          📝 Draft
+                          {draftingJob === job.id ? '⏳ Saving...' : '📝 Draft'}
                         </button>
                         <a
                           href={job.jobUrl}
