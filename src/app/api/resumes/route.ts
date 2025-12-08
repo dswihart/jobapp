@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { writeFile, mkdir, unlink } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
+import { sanitizeFilename, safePathJoin, validateUrlPath } from '@/lib/safe-path'
 
 const prisma = new PrismaClient()
 
@@ -81,9 +82,11 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const filename = `${session.user.id}-${randomUUID()}-${file.name}`
+    // Sanitize filename to prevent path traversal
+    const safeOriginalName = sanitizeFilename(file.name)
+    const filename = `${session.user.id}-${randomUUID()}-${safeOriginalName}`
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resumes')
-    const filepath = path.join(uploadDir, filename)
+    const filepath = safePathJoin(uploadDir, filename)
 
     await mkdir(uploadDir, { recursive: true })
     await writeFile(filepath, buffer)
@@ -102,7 +105,7 @@ export async function POST(request: NextRequest) {
     const resume = await prisma.resume.create({
       data: {
         name,
-        fileName: file.name,
+        fileName: safeOriginalName,
         fileUrl,
         fileType: file.type,
         fileSize: file.size,
@@ -144,6 +147,14 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
+    // Validate resumeId format
+    if (!/^[a-zA-Z0-9-_]+$/.test(resumeId)) {
+      return NextResponse.json(
+        { error: 'Invalid resume ID format' },
+        { status: 400 }
+      )
+    }
+
     // Find resume
     const resume = await prisma.resume.findUnique({
       where: { id: resumeId }
@@ -164,9 +175,10 @@ export async function DELETE(request: NextRequest) {
       )
     }
 
-    // Delete file
+    // Delete file with path validation
     try {
-      const filepath = path.join(process.cwd(), 'public', resume.fileUrl)
+      const sanitizedPath = validateUrlPath(resume.fileUrl)
+      const filepath = safePathJoin(process.cwd(), 'public', sanitizedPath)
       await unlink(filepath)
     } catch (fileError) {
       console.error('Error deleting file:', fileError)
@@ -206,6 +218,14 @@ export async function PATCH(request: NextRequest) {
     if (!id) {
       return NextResponse.json(
         { error: 'Resume ID is required' },
+        { status: 400 }
+      )
+    }
+
+    // Validate id format
+    if (!/^[a-zA-Z0-9-_]+$/.test(id)) {
+      return NextResponse.json(
+        { error: 'Invalid resume ID format' },
         { status: 400 }
       )
     }

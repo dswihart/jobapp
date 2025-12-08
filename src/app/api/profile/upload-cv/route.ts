@@ -4,6 +4,7 @@ import path from 'path'
 import { randomUUID } from 'crypto'
 import * as pdfParse from 'pdf-parse'
 import mammoth from 'mammoth'
+import { sanitizeFilename, safePathJoin } from '@/lib/safe-path'
 
 // Configure route to allow larger file uploads (10MB)
 export const dynamic = 'force-dynamic'
@@ -19,6 +20,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing file or userId' }, { status: 400 })
     }
 
+    // Validate userId format (should be alphanumeric/UUID)
+    if (!/^[a-zA-Z0-9-_]+$/.test(userId)) {
+      return NextResponse.json({ error: 'Invalid userId format' }, { status: 400 })
+    }
+
     // Check file size (10MB limit)
     const maxSize = 10 * 1024 * 1024 // 10MB in bytes
     if (file.size > maxSize) {
@@ -31,9 +37,11 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    const filename = `${userId}-${randomUUID()}-${file.name}`
+    // Sanitize filename to prevent path traversal
+    const safeOriginalName = sanitizeFilename(file.name)
+    const filename = `${userId}-${randomUUID()}-${safeOriginalName}`
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resumes')
-    const filepath = path.join(uploadDir, filename)
+    const filepath = safePathJoin(uploadDir, filename)
 
     // Create directory if it doesn't exist
     await mkdir(uploadDir, { recursive: true })
@@ -44,9 +52,9 @@ export async function POST(request: Request) {
     // Extract text from file
     let fileText = ''
 
-    console.log('[Upload CV] File type:', file.type, 'Name:', file.name, 'Size:', file.size)
+    console.log('[Upload CV] File type:', file.type, 'Name:', safeOriginalName, 'Size:', file.size)
 
-    const fileName = file.name.toLowerCase()
+    const fileName = safeOriginalName.toLowerCase()
     const isDocx = fileName.endsWith('.docx') || fileName.endsWith('.doc') || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.type === 'application/msword'
     const isPdf = fileName.endsWith('.pdf') || file.type === 'application/pdf'
     const isTxt = fileName.endsWith('.txt') || file.type === 'text/plain'

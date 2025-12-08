@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { readFile } from 'fs/promises'
 import path from 'path'
 import mammoth from 'mammoth'
+import { validateUrlPath, safePathJoin } from '@/lib/safe-path'
 
 const prisma = new PrismaClient()
 
@@ -23,6 +24,14 @@ export async function GET(
 
     const { id: resumeId } = await context.params
 
+    // Validate resumeId format
+    if (!/^[a-zA-Z0-9-_]+$/.test(resumeId)) {
+      return NextResponse.json(
+        { error: 'Invalid resume ID' },
+        { status: 400 }
+      )
+    }
+
     const resume = await prisma.resume.findUnique({
       where: { id: resumeId }
     })
@@ -41,7 +50,10 @@ export async function GET(
       )
     }
 
-    const filepath = path.join(process.cwd(), 'public', resume.fileUrl)
+    // Validate and sanitize the file path from database
+    const sanitizedPath = validateUrlPath(resume.fileUrl)
+    const filepath = safePathJoin(process.cwd(), 'public', sanitizedPath)
+    
     let content = ''
 
     try {

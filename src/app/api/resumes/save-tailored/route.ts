@@ -5,6 +5,7 @@ import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx'
+import { sanitizeFilename, safePathJoin } from '@/lib/safe-path'
 
 const prisma = new PrismaClient()
 
@@ -72,6 +73,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Sanitize the filename to prevent path traversal
+    const safeFilename = sanitizeFilename(filename)
+
     // Parse the resume content and create a DOCX document
     const paragraphs = parseResumeContent(content)
 
@@ -86,9 +90,9 @@ export async function POST(request: NextRequest) {
     const buffer = await Packer.toBuffer(doc)
 
     // Create a DOCX file with the tailored resume content
-    const uniqueFilename = `${session.user.id}-${randomUUID()}-${filename}.docx`
+    const uniqueFilename = `${session.user.id}-${randomUUID()}-${safeFilename}.docx`
     const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resumes')
-    const filepath = path.join(uploadDir, uniqueFilename)
+    const filepath = safePathJoin(uploadDir, uniqueFilename)
 
     await mkdir(uploadDir, { recursive: true })
     await writeFile(filepath, buffer)
@@ -100,6 +104,14 @@ export async function POST(request: NextRequest) {
     let applicationId = null
 
     if (jobId) {
+      // Validate jobId format
+      if (!/^[a-zA-Z0-9-_]+$/.test(jobId)) {
+        return NextResponse.json(
+          { error: 'Invalid job ID format' },
+          { status: 400 }
+        )
+      }
+
       if (jobSource === 'application') {
         // It's from the job tracker (application)
         const application = await prisma.application.findUnique({
@@ -128,7 +140,7 @@ export async function POST(request: NextRequest) {
         name: jobDetails
           ? `Tailored for ${jobDetails.title} at ${jobDetails.company}`
           : `Tailored Resume - ${new Date().toLocaleDateString()}`,
-        fileName: filename + '.docx',
+        fileName: safeFilename + '.docx',
         fileUrl,
         fileType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         fileSize: buffer.length,
