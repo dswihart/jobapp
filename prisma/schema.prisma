@@ -366,3 +366,77 @@ model SkillCategory {
 
   @@map("skill_categories")
 }
+
+
+
+
+// Interview Management - Comprehensive interview tracking
+model Interview {
+  id              String   @id @default(cuid())
+  applicationId   String   @map("application_id")
+  
+  // Interview timing
+  scheduledDate   DateTime @map("scheduled_date")
+  scheduledTime   String?  @map("scheduled_time")
+  duration        Int?     // Duration in minutes
+  actualDate      DateTime? @map("actual_date") // When it actually happened
+  
+  // Interview details
+  interviewType   String   @map("interview_type") // phone, video, in-person, panel, technical, behavioral
+  round           Int      @default(1) // Interview round number
+  stage           String?  // screening, technical, cultural, final, etc.
+  location        String?  // Physical location or video platform (Zoom, Teams, etc.)
+  meetingLink     String?  @map("meeting_link")
+  
+  // Status tracking
+  status          String   @default("scheduled") // scheduled, completed, cancelled, rescheduled, no-show
+  outcome         String?  // passed, failed, pending, moved_forward
+  
+  // Notes and content
+  preparationNotes String? @map("preparation_notes") @db.Text
+  postInterviewNotes String? @map("post_interview_notes") @db.Text
+  transcript      String?  @db.Text // Full interview transcript
+  
+  // AI Analysis
+  aiAnalysis      Json?    @map("ai_analysis") // Stores structured AI analysis
+  followUpSteps   Json?    @map("follow_up_steps") // AI-generated follow-up steps
+  analyzedAt      DateTime? @map("analyzed_at")
+  
+  // Feedback received
+  companyFeedback String?  @map("company_feedback") @db.Text
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  interviewers    Interviewer[]
+  
+  @@index([applicationId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("interviews")
+}
+
+model Interviewer {
+  id            String   @id @default(cuid())
+  interviewId   String   @map("interview_id")
+  
+  name          String
+  title         String?  // Job title/role
+  department    String?
+  email         String?
+  linkedInUrl   String?  @map("linkedin_url")
+  notes         String?  @db.Text // Personal notes about this interviewer
+  
+  // Impression tracking
+  impression    String?  // positive, neutral, negative
+  topics        String[] @default([]) // Topics they focused on
+  
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  
+  @@index([interviewId])
+  @@map("interviewers")
+}

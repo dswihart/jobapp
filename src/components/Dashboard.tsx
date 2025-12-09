@@ -1,5 +1,5 @@
 'use client'
-import { DocumentTextIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, SparklesIcon, CalendarIcon } from '@heroicons/react/24/outline'
 
 import { useState, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
@@ -16,10 +16,14 @@ import JobSearchSettings from './JobSearchSettings'
 import JobSourcesManager from './JobSourcesManager'
 import ResumeManager from './ResumeManager'
 import JobMonitor from './JobMonitor'
+import InterviewsSection from './InterviewsSection'
+import InterviewDetailModal from './InterviewDetailModal'
+import CreateInterviewModal from './CreateInterviewModal'
 
 import JobOpportunities from './JobOpportunities'
 import CollapsibleSection from './CollapsibleSection'
 import ApplicationsByDateChart from './ApplicationsByDateChart'
+
 interface Application {
   id: string
   company: string
@@ -52,6 +56,45 @@ interface User {
   dailyApplicationGoal?: number
 }
 
+interface Interview {
+  id: string
+  applicationId: string
+  scheduledDate: string
+  scheduledTime?: string
+  duration?: number
+  actualDate?: string
+  interviewType: string
+  round: number
+  stage?: string
+  location?: string
+  meetingLink?: string
+  status: string
+  outcome?: string
+  preparationNotes?: string
+  postInterviewNotes?: string
+  transcript?: string
+  aiAnalysis?: Record<string, unknown>
+  followUpSteps?: Array<{ priority: string; action: string; timing: string; reason: string }>
+  analyzedAt?: string
+  companyFeedback?: string
+  interviewers: Array<{
+    id: string
+    name: string
+    title?: string
+    department?: string
+    email?: string
+    linkedInUrl?: string
+    notes?: string
+    impression?: string
+    topics: string[]
+  }>
+  application?: {
+    id: string
+    company: string
+    role: string
+    status: string
+  }
+}
 
 export default function Dashboard() {
   const [applications, setApplications] = useState<Application[]>([])
@@ -68,7 +111,13 @@ export default function Dashboard() {
   const [dailyMessage, setDailyMessage] = useState('')
   const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; goalMet: boolean }>>([])
   const [last30DaysTotal, setLast30DaysTotal] = useState(0)
-  // Restore original line
+
+  // Interview states
+  const [isInterviewDetailOpen, setIsInterviewDetailOpen] = useState(false)
+  const [selectedInterview, setSelectedInterview] = useState<Interview | null>(null)
+  const [isCreateInterviewOpen, setIsCreateInterviewOpen] = useState(false)
+  const [interviewRefreshTrigger, setInterviewRefreshTrigger] = useState(0)
+
   // Fetch AI-generated motivational message
   const fetchMotivationalMessage = async () => {
     try {
@@ -110,7 +159,7 @@ export default function Dashboard() {
     }
 
     const todayStr = getDateString(new Date())
-    
+
     const count = applications.filter(app => {
       if (!app.appliedDate) return false
       const appliedDateStr = getDateString(new Date(app.appliedDate))
@@ -210,6 +259,7 @@ export default function Dashboard() {
     setCoverLetterApplication(application)
     setIsCoverLetterModalOpen(true)
   }
+
   const handleDeleteApplication = async (id: string) => {
     try {
       await fetch(`/api/applications/${id}`, {
@@ -277,13 +327,12 @@ Match Score: ${result.fitScore.overall}%
 - Location Match: ${result.fitScore.locationMatch}%
 
 Would you like to add this job to your applications?`
-          
+
           if (!confirm(fitMessage)) {
             return
           }
         }
 
-        // Pre-populate the application modal with parsed data
         // Pre-populate the application modal with parsed data
         setEditingApplication({
           id: '',
@@ -306,6 +355,20 @@ Would you like to add this job to your applications?`
     } finally {
       setIsParsingUrl(false)
     }
+  }
+
+  // Interview handlers
+  const handleOpenInterviewDetail = (interview: Interview) => {
+    setSelectedInterview(interview)
+    setIsInterviewDetailOpen(true)
+  }
+
+  const handleCreateInterview = () => {
+    setIsCreateInterviewOpen(true)
+  }
+
+  const handleInterviewSuccess = () => {
+    setInterviewRefreshTrigger(prev => prev + 1)
   }
 
   if (loading) {
@@ -339,7 +402,22 @@ Would you like to add this job to your applications?`
                   <span className="hidden sm:inline">Resume Tailor</span>
                   <span className="sm:hidden">Tailor</span>
                 </a>
-<a                  href="/stats"                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"                >                  <ChartBarIcon className="h-4 w-4 sm:h-5 sm:w-5" />                  <span className="hidden sm:inline">Statistics</span>                  <span className="sm:hidden">Stats</span></a><a href="/skills" className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"><AcademicCapIcon className="h-4 w-4 sm:h-5 sm:w-5" /><span className="hidden sm:inline">Skills</span><span className="sm:hidden">Skills</span></a>
+                <a
+                  href="/stats"
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"
+                >
+                  <ChartBarIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden sm:inline">Statistics</span>
+                  <span className="sm:hidden">Stats</span>
+                </a>
+                <a
+                  href="/skills"
+                  className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"
+                >
+                  <AcademicCapIcon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden sm:inline">Skills</span>
+                  <span className="sm:hidden">Skills</span>
+                </a>
                 <button
                   onClick={() => setIsProfileModalOpen(true)}
                   className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-sm sm:text-base"
@@ -438,7 +516,7 @@ Would you like to add this job to your applications?`
               const dayNum = dateObj.toLocaleDateString("en-US", { day: "numeric" })
               const monthShort = dateObj.toLocaleDateString("en-US", { month: "short" })
               const weekday = dateObj.toLocaleDateString("en-US", { weekday: "short" })
-              
+
               return (
                 <div key={index} className={`aspect-square flex flex-col items-center justify-center rounded text-center border ${day.goalMet ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600" : day.count >= 2 ? "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-400 dark:border-yellow-600" : "bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600"}`}>
                   <div className="text-[7px] text-gray-600 dark:text-gray-400">
@@ -469,8 +547,17 @@ Would you like to add this job to your applications?`
           <ResumeManager />
         </CollapsibleSection>
 
-<CollapsibleSection title="Job Opportunities" defaultExpanded={false} className="mb-8">
+        <CollapsibleSection title="Job Opportunities" defaultExpanded={false} className="mb-8">
           <JobOpportunities userId={user?.id || ""} onApplicationCreated={fetchApplications} />
+        </CollapsibleSection>
+
+        {/* Interview Tracking Section */}
+        <CollapsibleSection title="Interview Tracking" defaultExpanded={true} className="mb-8">
+          <InterviewsSection
+            onOpenInterviewDetail={handleOpenInterviewDetail}
+            onCreateInterview={handleCreateInterview}
+            refreshTrigger={interviewRefreshTrigger}
+          />
         </CollapsibleSection>
 
         <CollapsibleSection title="Applications Over Time" defaultExpanded={true} className="mb-8">
@@ -545,7 +632,8 @@ Would you like to add this job to your applications?`
         onSubmit={handleApplicationSubmit}
         application={editingApplication}
       />
-n      <CoverLetterModal
+
+      <CoverLetterModal
         isOpen={isCoverLetterModalOpen}
         onClose={() => {
           setIsCoverLetterModalOpen(false)
@@ -553,6 +641,23 @@ n      <CoverLetterModal
         }}
         application={coverLetterApplication}
         onSuccess={fetchApplications}
+      />
+
+      {/* Interview Modals */}
+      <InterviewDetailModal
+        isOpen={isInterviewDetailOpen}
+        onClose={() => {
+          setIsInterviewDetailOpen(false)
+          setSelectedInterview(null)
+        }}
+        interview={selectedInterview}
+        onSuccess={handleInterviewSuccess}
+      />
+
+      <CreateInterviewModal
+        isOpen={isCreateInterviewOpen}
+        onClose={() => setIsCreateInterviewOpen(false)}
+        onSuccess={handleInterviewSuccess}
       />
 
       {isProfileModalOpen && user?.id && (
