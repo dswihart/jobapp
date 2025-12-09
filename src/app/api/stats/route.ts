@@ -57,13 +57,74 @@ export async function GET() {
       })
     }
 
+    // Interview Statistics
+    const now = new Date()
+    
+    const totalInterviews = await prisma.interview.count()
+    
+    const upcomingInterviews = await prisma.interview.count({
+      where: {
+        scheduledDate: { gte: now },
+        status: { in: ['scheduled', 'rescheduled'] }
+      }
+    })
+    
+    const completedInterviews = await prisma.interview.count({
+      where: {
+        status: 'completed'
+      }
+    })
+    
+    const interviewOutcomes = await prisma.interview.groupBy({
+      by: ['outcome'],
+      _count: {
+        outcome: true
+      },
+      where: {
+        outcome: { not: null }
+      }
+    })
+    
+    // Calculate pass rate (passed / (passed + failed))
+    const passedCount = interviewOutcomes.find(o => o.outcome === 'passed')?._count?.outcome || 0
+    const failedCount = interviewOutcomes.find(o => o.outcome === 'failed')?._count?.outcome || 0
+    const passRate = (passedCount + failedCount) > 0 
+      ? Math.round((passedCount / (passedCount + failedCount)) * 100) 
+      : 0
+    
+    // Interview types breakdown
+    const interviewTypes = await prisma.interview.groupBy({
+      by: ['interviewType'],
+      _count: {
+        interviewType: true
+      }
+    })
+
     const stats = {
       total: totalApplications,
       byStatus: statusCounts.reduce((acc, item) => {
         acc[item.status] = item._count.status
         return acc
       }, {} as Record<string, number>),
-      dailyStats: dailyStats
+      dailyStats: dailyStats,
+      interviews: {
+        total: totalInterviews,
+        upcoming: upcomingInterviews,
+        completed: completedInterviews,
+        passRate: passRate,
+        passed: passedCount,
+        failed: failedCount,
+        byType: interviewTypes.reduce((acc, item) => {
+          acc[item.interviewType] = item._count.interviewType
+          return acc
+        }, {} as Record<string, number>),
+        byOutcome: interviewOutcomes.reduce((acc, item) => {
+          if (item.outcome) {
+            acc[item.outcome] = item._count.outcome
+          }
+          return acc
+        }, {} as Record<string, number>)
+      }
     }
 
     return NextResponse.json(stats)

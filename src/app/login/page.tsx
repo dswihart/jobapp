@@ -4,8 +4,19 @@ import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChartBarIcon, SunIcon, MoonIcon, UserIcon } from '@heroicons/react/24/outline'
+import { ChartBarIcon, SunIcon, MoonIcon, UserIcon, CalendarDaysIcon, CheckCircleIcon, ClockIcon, TrophyIcon } from '@heroicons/react/24/outline'
 import ApplicationsByDateChart from '@/components/ApplicationsByDateChart'
+
+interface InterviewStats {
+  total: number
+  upcoming: number
+  completed: number
+  passRate: number
+  passed: number
+  failed: number
+  byType: Record<string, number>
+  byOutcome: Record<string, number>
+}
 
 interface Stats {
   total: number
@@ -15,6 +26,7 @@ interface Stats {
     count: number
     dayLabel: string
   }>
+  interviews?: InterviewStats
 }
 
 interface UserStats extends Stats {
@@ -83,7 +95,6 @@ const getEnhancedMetrics = (stats: Stats | null) => {
   const applied = stats.byStatus.APPLIED || 0
   const interviewing = stats.byStatus.INTERVIEWING || 0
   const rejected = stats.byStatus.REJECTED || 0
-  const draft = stats.byStatus.DRAFT || 0
 
   const activePipeline = applied + interviewing
   const responseRate = applied > 0 ? Math.round((interviewing / applied) * 100) : 0
@@ -294,13 +305,13 @@ export default function LoginPage() {
                   const count = day.count || 0
                   const goalMet = count >= dailyGoal
                   const isToday = date.toDateString() === new Date().toDateString()
-                  
+
                   return (
                     <div
                       key={day.date}
                       className={"aspect-square flex flex-col items-center justify-center rounded text-center " + (
-                        isToday 
-                          ? "bg-blue-100 dark:bg-blue-900 border border-blue-500 dark:border-blue-400" 
+                        isToday
+                          ? "bg-blue-100 dark:bg-blue-900 border border-blue-500 dark:border-blue-400"
                           : goalMet
                             ? "bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-600"
                             : count >= 2
@@ -387,6 +398,59 @@ export default function LoginPage() {
                 <div className="text-xs text-red-600 dark:text-red-400 mt-1">Rejected</div>
               </div>
             </div>
+
+            {/* Interview Statistics Section */}
+            {displayStats.interviews && displayStats.interviews.total > 0 && (
+              <>
+                <div className="text-center mt-6 mb-3">
+                  <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-200 flex items-center justify-center gap-2">
+                    <CalendarDaysIcon className="h-5 w-5" />
+                    Interview Statistics
+                  </h2>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+                  <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-lg p-3 text-center border border-indigo-200 dark:border-indigo-800">
+                    <CalendarDaysIcon className="h-5 w-5 mx-auto text-indigo-600 dark:text-indigo-400 mb-1" />
+                    <div className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">{displayStats.interviews.total}</div>
+                    <div className="text-xs text-indigo-700 dark:text-indigo-300 mt-1">Total Interviews</div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20 rounded-lg p-3 text-center border border-cyan-200 dark:border-cyan-800">
+                    <ClockIcon className="h-5 w-5 mx-auto text-cyan-600 dark:text-cyan-400 mb-1" />
+                    <div className="text-xl sm:text-2xl font-bold text-cyan-600 dark:text-cyan-400">{displayStats.interviews.upcoming}</div>
+                    <div className="text-xs text-cyan-700 dark:text-cyan-300 mt-1">Upcoming</div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 rounded-lg p-3 text-center border border-emerald-200 dark:border-emerald-800">
+                    <CheckCircleIcon className="h-5 w-5 mx-auto text-emerald-600 dark:text-emerald-400 mb-1" />
+                    <div className="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-400">{displayStats.interviews.completed}</div>
+                    <div className="text-xs text-emerald-700 dark:text-emerald-300 mt-1">Completed</div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 rounded-lg p-3 text-center border border-amber-200 dark:border-amber-800">
+                    <TrophyIcon className="h-5 w-5 mx-auto text-amber-600 dark:text-amber-400 mb-1" />
+                    <div className="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400">{displayStats.interviews.passRate}%</div>
+                    <div className="text-xs text-amber-700 dark:text-amber-300 mt-1">Pass Rate</div>
+                  </div>
+                </div>
+
+                {/* Interview Outcomes */}
+                {(displayStats.interviews.passed > 0 || displayStats.interviews.failed > 0) && (
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3 mt-3">
+                    <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 text-center border border-green-200 dark:border-green-800">
+                      <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">{displayStats.interviews.passed}</div>
+                      <div className="text-xs text-green-700 dark:text-green-300 mt-1">Passed</div>
+                    </div>
+
+                    <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 text-center border border-red-200 dark:border-red-800">
+                      <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">{displayStats.interviews.failed}</div>
+                      <div className="text-xs text-red-700 dark:text-red-300 mt-1">Failed</div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
 
             {/* Summary Stats */}
             {displayStats.dailyStats && (

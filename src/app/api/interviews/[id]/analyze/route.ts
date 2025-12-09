@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import OpenAI from "openai"
+import Anthropic from "@anthropic-ai/sdk"
 
 // POST - Analyze interview transcript with AI
 export async function POST(
@@ -17,9 +17,9 @@ export async function POST(
     const userId = session.user.id
     const { id } = await params
 
-    // Initialize OpenAI client inside the handler
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+    // Initialize Anthropic client inside the handler
+    const anthropic = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
     })
 
     // Find the interview
@@ -62,13 +62,7 @@ ${interviewerNames ? `Interviewers: ${interviewerNames}` : ""}
 ${interview.preparationNotes ? `Preparation Notes: ${interview.preparationNotes}` : ""}
     `.trim()
 
-    // Call OpenAI for analysis
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert interview coach and career advisor. Analyze interview transcripts to provide actionable insights. Be specific, constructive, and focus on helping the candidate improve and succeed.
+    const systemPrompt = `You are an expert interview coach and career advisor. Analyze interview transcripts to provide actionable insights. Be specific, constructive, and focus on helping the candidate improve and succeed.
 
 Your response must be valid JSON with the following structure:
 {
@@ -114,8 +108,15 @@ Your response must be valid JSON with the following structure:
     "questionsToAsk": ["question1", "question2"],
     "areasToStudy": ["area1", "area2"]
   }
-}`
-        },
+}
+
+IMPORTANT: Respond ONLY with valid JSON, no additional text or markdown.`
+
+    // Call Anthropic Claude for analysis
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      messages: [
         {
           role: "user",
           content: `Please analyze this interview transcript and provide detailed insights.
@@ -124,22 +125,25 @@ Context:
 ${context}
 
 Transcript:
-${interview.transcript}`
+${interview.transcript}
+
+Remember to respond with ONLY valid JSON matching the schema provided.`
         }
       ],
-      response_format: { type: "json_object" },
-      temperature: 0.7,
-      max_tokens: 4000,
+      system: systemPrompt,
     })
 
-    const analysisText = completion.choices[0]?.message?.content
+    // Extract text from the response
+    const analysisText = message.content[0].type === 'text' ? message.content[0].text : null
     if (!analysisText) {
       return NextResponse.json({ error: "Failed to generate analysis" }, { status: 500 })
     }
 
     let analysis
     try {
-      analysis = JSON.parse(analysisText)
+      // Clean the response in case there's any markdown formatting
+      const cleanedText = analysisText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      analysis = JSON.parse(cleanedText)
     } catch {
       console.error("Failed to parse AI response:", analysisText)
       return NextResponse.json({ error: "Failed to parse analysis" }, { status: 500 })

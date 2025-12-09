@@ -1,5 +1,5 @@
 'use client'
-import { DocumentTextIcon, SparklesIcon, CalendarIcon } from '@heroicons/react/24/outline'
+import { DocumentTextIcon, SparklesIcon, CalendarIcon, CalendarDaysIcon, ClockIcon, CheckCircleIcon as CheckCircleSolidIcon, TrophyIcon } from '@heroicons/react/24/outline'
 
 import { useState, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
@@ -96,6 +96,15 @@ interface Interview {
   }
 }
 
+interface InterviewStats {
+  total: number
+  upcoming: number
+  completed: number
+  passRate: number
+  passed: number
+  failed: number
+}
+
 export default function Dashboard() {
   const [applications, setApplications] = useState<Application[]>([])
   const [user, setUser] = useState<User | null>(null)
@@ -111,6 +120,7 @@ export default function Dashboard() {
   const [dailyMessage, setDailyMessage] = useState('')
   const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; goalMet: boolean }>>([])
   const [last30DaysTotal, setLast30DaysTotal] = useState(0)
+  const [interviewStats, setInterviewStats] = useState<InterviewStats | null>(null)
 
   // Interview states
   const [isInterviewDetailOpen, setIsInterviewDetailOpen] = useState(false)
@@ -139,11 +149,32 @@ export default function Dashboard() {
     }
   }
 
+  // Fetch interview statistics
+  const fetchInterviewStats = async () => {
+    try {
+      const response = await fetch('/api/stats')
+      if (response.ok) {
+        const data = await response.json()
+        if (data.interviews) {
+          setInterviewStats(data.interviews)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch interview stats:', error)
+    }
+  }
+
   useEffect(() => {
     fetchApplications()
     fetchUser()
     fetchMotivationalMessage()
+    fetchInterviewStats()
   }, [])
+
+  // Refresh interview stats when interviews change
+  useEffect(() => {
+    fetchInterviewStats()
+  }, [interviewRefreshTrigger])
 
   useEffect(() => {
     // Calculate today's applications count
@@ -505,6 +536,59 @@ Would you like to add this job to your applications?`
           </div>
         </div>
       </div>
+
+      {/* Interview Statistics Banner */}
+      {interviewStats && interviewStats.total > 0 && (
+        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 dark:from-indigo-700 dark:to-indigo-800 shadow-lg">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-3">
+                <div className="bg-white dark:bg-gray-800 rounded-full p-3">
+                  <CalendarDaysIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Interview Statistics</h2>
+                  <p className="text-xs text-indigo-100">Track your interview progress</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white/10 backdrop-blur rounded-lg p-3 text-center">
+                <CalendarDaysIcon className="h-5 w-5 mx-auto text-white mb-1" />
+                <div className="text-2xl font-bold text-white">{interviewStats.total}</div>
+                <div className="text-xs text-indigo-100">Total</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur rounded-lg p-3 text-center">
+                <ClockIcon className="h-5 w-5 mx-auto text-cyan-300 mb-1" />
+                <div className="text-2xl font-bold text-white">{interviewStats.upcoming}</div>
+                <div className="text-xs text-indigo-100">Upcoming</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur rounded-lg p-3 text-center">
+                <CheckCircleSolidIcon className="h-5 w-5 mx-auto text-emerald-300 mb-1" />
+                <div className="text-2xl font-bold text-white">{interviewStats.completed}</div>
+                <div className="text-xs text-indigo-100">Completed</div>
+              </div>
+              <div className="bg-white/10 backdrop-blur rounded-lg p-3 text-center">
+                <TrophyIcon className="h-5 w-5 mx-auto text-amber-300 mb-1" />
+                <div className="text-2xl font-bold text-white">{interviewStats.passRate}%</div>
+                <div className="text-xs text-indigo-100">Pass Rate</div>
+              </div>
+            </div>
+            {(interviewStats.passed > 0 || interviewStats.failed > 0) && (
+              <div className="grid grid-cols-2 gap-3 mt-3">
+                <div className="bg-green-500/20 backdrop-blur rounded-lg p-2 text-center">
+                  <div className="text-xl font-bold text-green-300">{interviewStats.passed}</div>
+                  <div className="text-xs text-green-200">Passed</div>
+                </div>
+                <div className="bg-red-500/20 backdrop-blur rounded-lg p-2 text-center">
+                  <div className="text-xl font-bold text-red-300">{interviewStats.failed}</div>
+                  <div className="text-xs text-red-200">Failed</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Past 30 Days Goals Tracker */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
