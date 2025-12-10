@@ -450,7 +450,7 @@ Would you like to add this job to your applications?`
                   <span className="sm:hidden">Skills</span>
                 </a>
                 <button
-                  onClick={() => setIsProfileModalOpen(true)}
+                  onClick={() => setIsProfileModalOpen(true)} aria-label="Open profile settings"
                   className="bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 px-3 py-2 rounded-lg text-sm sm:text-base"
                 >
                   Profile
@@ -459,7 +459,7 @@ Would you like to add this job to your applications?`
                   onClick={handleQuickAddFromUrl}
                   disabled={isParsingUrl}
                   className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"
-                  title="Add job from URL (or try our LinkedIn bookmarklet at /bookmarklet)"
+                  aria-label="Add job from URL" title="Add job from URL (or try our LinkedIn bookmarklet at /bookmarklet)"
                 >
                   <LinkIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span className="hidden sm:inline">{isParsingUrl ? 'Parsing...' : 'Add from URL'}</span>
@@ -479,7 +479,7 @@ Would you like to add this job to your applications?`
                 <button
                   onClick={handleLogout}
                   className="bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"
-                  title="Logout"
+                  aria-label="Logout from application" title="Logout"
                 >
                   <ArrowRightOnRectangleIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span className="hidden sm:inline">Logout</span>
