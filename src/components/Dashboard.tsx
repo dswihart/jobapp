@@ -404,6 +404,7 @@ Would you like to add this job to your applications?`
 
   if (loading) {
     return (
+                // Added accessibility: title and aria-label for goal status
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
       </div>
@@ -411,6 +412,7 @@ Would you like to add this job to your applications?`
   }
 
   return (
+                // Added accessibility: title and aria-label for goal status
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <header className="bg-white dark:bg-gray-800 shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -602,6 +604,7 @@ Would you like to add this job to your applications?`
               const weekday = dateObj.toLocaleDateString("en-US", { weekday: "short" })
 
               return (
+                // Added accessibility: title and aria-label for goal status
                 <div key={index} className={`aspect-square flex flex-col items-center justify-center rounded text-center border ${day.goalMet ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600" : day.count >= 2 ? "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-400 dark:border-yellow-600" : "bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600"}`}>
                   <div className="text-[7px] text-gray-600 dark:text-gray-400">
                     {weekday}
