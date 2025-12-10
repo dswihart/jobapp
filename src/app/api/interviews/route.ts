@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         stage: data.stage || null,
         location: data.location || null,
         meetingLink: data.meetingLink || null,
-        status: new Date(data.scheduledDate) < new Date() ? "completed" : "scheduled",
+        status: 'scheduled',
         preparationNotes: data.preparationNotes || null,
         interviewers: data.interviewers?.length > 0 ? {
           create: data.interviewers.map((interviewer: { name: string; title?: string; department?: string; email?: string; linkedInUrl?: string }) => ({
