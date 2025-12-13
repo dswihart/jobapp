@@ -109,6 +109,9 @@ export default function InterviewDetailModal({
   const [error, setError] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
 
+  // Local interview state to update after analysis
+  const [localInterview, setLocalInterview] = useState<Interview | null>(interview)
+
   // Form states
   const [editMode, setEditMode] = useState(false)
   const [formData, setFormData] = useState({
@@ -160,7 +163,8 @@ export default function InterviewDetailModal({
       })
       setInterviewers(interview.interviewers || [])
       setEditMode(false)
-      setActiveTab('details')
+      setLocalInterview(interview)
+      setActiveTab("details")
     }
   }, [interview, isOpen])
 
@@ -261,6 +265,10 @@ export default function InterviewDetailModal({
 
       const data = await response.json()
       if (data.success) {
+        // Update local interview with analysis data
+        if (data.interview) {
+          setLocalInterview(data.interview)
+        }
         onSuccess()
         setActiveTab('analysis')
       } else {
@@ -367,7 +375,7 @@ export default function InterviewDetailModal({
                 >
                   {tab.icon}
                   {tab.label}
-                  {tab.id === 'analysis' && interview.aiAnalysis && (
+                  {tab.id === 'analysis' && localInterview?.aiAnalysis && (
                     <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs px-1.5 py-0.5 rounded">
                       ✓
                     </span>
@@ -746,7 +754,7 @@ Me: I've been working with React for the past 3 years..."
             {/* Analysis Tab */}
             {activeTab === 'analysis' && (
               <div className="space-y-6">
-                {!interview.aiAnalysis ? (
+                {!localInterview?.aiAnalysis ? (
                   <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                     <SparklesIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
                     <p className="text-lg font-medium">No AI analysis yet</p>
@@ -755,25 +763,25 @@ Me: I've been working with React for the past 3 years..."
                 ) : (
                   <>
                     {/* Overall Assessment */}
-                    {interview.aiAnalysis.overallAssessment && (
+                    {localInterview?.aiAnalysis.overallAssessment && (
                       <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-lg p-6">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Overall Assessment</h3>
-                        {interview.aiAnalysis.overallAssessment.score && (
+                        {localInterview?.aiAnalysis.overallAssessment.score && (
                           <div className="flex items-center gap-4 mb-4">
                             <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">
-                              {interview.aiAnalysis.overallAssessment.score}/10
+                              {localInterview?.aiAnalysis.overallAssessment.score}/10
                             </div>
                           </div>
                         )}
                         <p className="text-gray-700 dark:text-gray-300 mb-4">
-                          {interview.aiAnalysis.overallAssessment.summary}
+                          {localInterview?.aiAnalysis.overallAssessment.summary}
                         </p>
                         <div className="grid md:grid-cols-2 gap-4">
-                          {interview.aiAnalysis.overallAssessment.strengths && (
+                          {localInterview?.aiAnalysis.overallAssessment.strengths && (
                             <div>
                               <h4 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Strengths</h4>
                               <ul className="space-y-1">
-                                {interview.aiAnalysis.overallAssessment.strengths.map((s, i) => (
+                                {localInterview?.aiAnalysis.overallAssessment.strengths.map((s, i) => (
                                   <li key={i} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
                                     <span className="text-green-500">✓</span> {s}
                                   </li>
@@ -781,11 +789,11 @@ Me: I've been working with React for the past 3 years..."
                               </ul>
                             </div>
                           )}
-                          {interview.aiAnalysis.overallAssessment.areasForImprovement && (
+                          {localInterview?.aiAnalysis.overallAssessment.areasForImprovement && (
                             <div>
                               <h4 className="text-sm font-medium text-orange-700 dark:text-orange-400 mb-2">Areas to Improve</h4>
                               <ul className="space-y-1">
-                                {interview.aiAnalysis.overallAssessment.areasForImprovement.map((a, i) => (
+                                {localInterview?.aiAnalysis.overallAssessment.areasForImprovement.map((a, i) => (
                                   <li key={i} className="text-sm text-gray-600 dark:text-gray-400 flex items-start gap-2">
                                     <span className="text-orange-500">→</span> {a}
                                   </li>
@@ -798,11 +806,11 @@ Me: I've been working with React for the past 3 years..."
                     )}
 
                     {/* Follow-up Steps */}
-                    {interview.followUpSteps && interview.followUpSteps.length > 0 && (
+                    {localInterview?.followUpSteps && localInterview?.followUpSteps.length > 0 && (
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Follow-up Actions</h3>
                         <div className="space-y-3">
-                          {interview.followUpSteps.map((step, idx) => (
+                          {localInterview?.followUpSteps.map((step, idx) => (
                             <div
                               key={idx}
                               className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
@@ -832,11 +840,11 @@ Me: I've been working with React for the past 3 years..."
                     )}
 
                     {/* Thank You Email Points */}
-                    {interview.aiAnalysis.thankyouEmailPoints && interview.aiAnalysis.thankyouEmailPoints.length > 0 && (
+                    {localInterview?.aiAnalysis.thankyouEmailPoints && localInterview?.aiAnalysis.thankyouEmailPoints.length > 0 && (
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Thank You Email Points</h3>
                         <ul className="space-y-2 bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                          {interview.aiAnalysis.thankyouEmailPoints.map((point, idx) => (
+                          {localInterview?.aiAnalysis.thankyouEmailPoints.map((point, idx) => (
                             <li key={idx} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-2">
                               <span className="text-green-500">•</span> {point}
                             </li>
@@ -846,11 +854,11 @@ Me: I've been working with React for the past 3 years..."
                     )}
 
                     {/* Questions Asked */}
-                    {interview.aiAnalysis.questionsAsked && interview.aiAnalysis.questionsAsked.length > 0 && (
+                    {localInterview?.aiAnalysis.questionsAsked && localInterview?.aiAnalysis.questionsAsked.length > 0 && (
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Questions Analysis</h3>
                         <div className="space-y-4">
-                          {interview.aiAnalysis.questionsAsked.map((q, idx) => (
+                          {localInterview?.aiAnalysis.questionsAsked.map((q, idx) => (
                             <div key={idx} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                               <p className="font-medium text-gray-900 dark:text-white mb-2">&quot;{q.question}&quot;</p>
                               <div className="space-y-2 text-sm">
@@ -873,35 +881,35 @@ Me: I've been working with React for the past 3 years..."
                     )}
 
                     {/* Next Round Preparation */}
-                    {interview.aiAnalysis.nextRoundPreparation && (
+                    {localInterview?.aiAnalysis.nextRoundPreparation && (
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Prepare for Next Round</h3>
                         <div className="grid md:grid-cols-3 gap-4">
-                          {interview.aiAnalysis.nextRoundPreparation.likelyTopics && (
+                          {localInterview?.aiAnalysis.nextRoundPreparation.likelyTopics && (
                             <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
                               <h4 className="text-sm font-medium text-blue-700 dark:text-blue-400 mb-2">Likely Topics</h4>
                               <ul className="space-y-1">
-                                {interview.aiAnalysis.nextRoundPreparation.likelyTopics.map((t, i) => (
+                                {localInterview?.aiAnalysis.nextRoundPreparation.likelyTopics.map((t, i) => (
                                   <li key={i} className="text-sm text-gray-600 dark:text-gray-400">• {t}</li>
                                 ))}
                               </ul>
                             </div>
                           )}
-                          {interview.aiAnalysis.nextRoundPreparation.questionsToAsk && (
+                          {localInterview?.aiAnalysis.nextRoundPreparation.questionsToAsk && (
                             <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
                               <h4 className="text-sm font-medium text-purple-700 dark:text-purple-400 mb-2">Questions to Ask</h4>
                               <ul className="space-y-1">
-                                {interview.aiAnalysis.nextRoundPreparation.questionsToAsk.map((q, i) => (
+                                {localInterview?.aiAnalysis.nextRoundPreparation.questionsToAsk.map((q, i) => (
                                   <li key={i} className="text-sm text-gray-600 dark:text-gray-400">• {q}</li>
                                 ))}
                               </ul>
                             </div>
                           )}
-                          {interview.aiAnalysis.nextRoundPreparation.areasToStudy && (
+                          {localInterview?.aiAnalysis.nextRoundPreparation.areasToStudy && (
                             <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
                               <h4 className="text-sm font-medium text-green-700 dark:text-green-400 mb-2">Areas to Study</h4>
                               <ul className="space-y-1">
-                                {interview.aiAnalysis.nextRoundPreparation.areasToStudy.map((a, i) => (
+                                {localInterview?.aiAnalysis.nextRoundPreparation.areasToStudy.map((a, i) => (
                                   <li key={i} className="text-sm text-gray-600 dark:text-gray-400">• {a}</li>
                                 ))}
                               </ul>
