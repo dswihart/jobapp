@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from "next/server"
 import { analyzeJobFitEnhanced } from "@/lib/ai-service"
 import { prisma } from "@/lib/prisma"
-import Anthropic from '@anthropic-ai/sdk'
+import Anthropic from "@anthropic-ai/sdk"
+import puppeteer from "puppeteer"
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
 
     if (!url) {
       return NextResponse.json(
-        { error: 'Job URL is required' },
+        { error: "Job URL is required" },
         { status: 400 }
       )
     }
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     
     // Add https:// if no protocol specified
     if (!url.match(/^https?:\/\//i)) {
-      url = 'https://' + url
+      url = "https://" + url
     }
 
     // Validate URL
@@ -32,66 +33,101 @@ export async function POST(request: NextRequest) {
       new URL(url)
     } catch {
       return NextResponse.json(
-        { error: 'Invalid URL format. Please enter a valid URL like https://example.com/job' },
+        { error: "Invalid URL format. Please enter a valid URL like https://example.com/job" },
         { status: 400 }
       )
     }
 
-    console.log('Fetching job page:', url)
+    console.log("Fetching job page with Puppeteer:", url)
     
-    // Try multiple methods to fetch the page
-    let html = ''
+    let html = ""
     let fetchError = null
     
-    // Method 1: Try with enhanced headers
+    // Use Puppeteer for JavaScript-rendered pages
+    let browser = null
     try {
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'DNT': '1',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
-          'Cache-Control': 'max-age=0'
-        }
+      browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-gpu",
+          "--single-process"
+        ]
       })
-
-      if (response.ok) {
-        html = await response.text()
-      } else {
-        fetchError = `HTTP ${response.status}: ${response.statusText}`
-      }
+      
+      const page = await browser.newPage()
+      
+      // Set realistic user agent
+      await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+      
+      // Set viewport
+      await page.setViewport({ width: 1920, height: 1080 })
+      
+      // Navigate with timeout
+      await page.goto(url, { 
+        waitUntil: "networkidle2",
+        timeout: 30000 
+      })
+      
+      // Wait for content to load
+      await page.waitForTimeout(2000)
+      
+      // Get the rendered HTML
+      html = await page.content()
+      
+      console.log("Puppeteer fetched HTML length:", html.length)
+      
     } catch (error) {
-      fetchError = error instanceof Error ? error.message : 'Fetch failed'
+      fetchError = error instanceof Error ? error.message : "Puppeteer fetch failed"
+      console.error("Puppeteer error:", fetchError)
+      
+      // Fallback to simple fetch
+      try {
+        console.log("Falling back to simple fetch...")
+        const response = await fetch(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5"
+          }
+        })
+        if (response.ok) {
+          html = await response.text()
+          fetchError = null
+        }
+      } catch (fallbackError) {
+        // Keep original puppeteer error
+      }
+    } finally {
+      if (browser) {
+        await browser.close()
+      }
     }
 
     // If fetch failed, return error with helpful message
     if (!html && fetchError) {
       return NextResponse.json(
         { 
-          error: 'Failed to fetch job page',
-          details: `The job site blocked the request (${fetchError}). This often happens with job boards that have anti-bot protection. Try copying the job details manually or use a different URL.`
+          error: "Failed to fetch job page",
+          details: `Could not load the page (${fetchError}). The site may be blocking automated access. Try copying the job details manually.`
         },
         { status: 500 }
       )
     }
 
     // Use Claude to extract job information
-    console.log('Parsing job data with AI...')
+    console.log("Parsing job data with AI, HTML length:", html.length)
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: "claude-sonnet-4-5",
       max_tokens: 2000,
       messages: [{
-        role: 'user',
-        content: `You are an expert job posting parser. Be aggressive in finding job information. Extract structured information from this HTML page.
+        role: "user",
+        content: `You are an expert job posting parser. Extract structured information from this HTML page.
 
-HTML Content:
-${html.substring(0, 50000)}
+HTML Content (truncated):
+${html.substring(0, 80000)}
 
 Extract and return ONLY a JSON object with these fields (no additional text):
 {
@@ -109,8 +145,8 @@ If information is not found, use null for that field. Be concise and accurate.`
     })
 
     const content = message.content[0]
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response type from Claude')
+    if (content.type !== "text") {
+      throw new Error("Unexpected response type from Claude")
     }
 
     // Parse the AI response
@@ -118,7 +154,7 @@ If information is not found, use null for that field. Be concise and accurate.`
     try {
       let text = content.text.trim()
       // Remove markdown code blocks if present
-      let jsonText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      let jsonText = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
       // Extract JSON object if embedded in text
       const jsonMatch = jsonText.match(/\{[\s\S]*\}/)
       if (jsonMatch) {
@@ -126,9 +162,9 @@ If information is not found, use null for that field. Be concise and accurate.`
       }
       parsedData = JSON.parse(jsonText)
     } catch (parseError) {
-      console.error('Failed to parse AI response:', content.text)
+      console.error("Failed to parse AI response:", content.text)
       return NextResponse.json(
-        { error: 'Failed to parse job data from AI response' },
+        { error: "Failed to parse job data from AI response" },
         { status: 500 }
       )
     }
@@ -138,7 +174,7 @@ If information is not found, use null for that field. Be concise and accurate.`
     try {
       // Get user profile (using default user for now)
       const user = await prisma.user.findUnique({
-        where: { id: 'default-user-id' }
+        where: { id: "default-user-id" }
       })
 
       if (user && parsedData.role) {
@@ -146,7 +182,7 @@ If information is not found, use null for that field. Be concise and accurate.`
           primarySkills: (user.primarySkills || user.skills) as string[],
           secondarySkills: (user.secondarySkills || []) as string[],
           learningSkills: (user.learningSkills || []) as string[],
-          yearsOfExperience: user.yearsOfExperience || parseInt(user.experience?.replace(/\D/g, '') || '0'),
+          yearsOfExperience: user.yearsOfExperience || parseInt(user.experience?.replace(/\D/g, "") || "0"),
           seniorityLevel: user.seniorityLevel || undefined,
           desiredRoles: user.desiredRoles as string[],
           desiredLocations: user.desiredLocations as string[],
@@ -157,11 +193,11 @@ If information is not found, use null for that field. Be concise and accurate.`
         const jobFit = await analyzeJobFitEnhanced(
           enhancedProfile,
           {
-            title: parsedData.role || '',
-            company: parsedData.company || '',
-            description: parsedData.description || '',
-            requirements: parsedData.requirements || '',
-            location: parsedData.location || '',
+            title: parsedData.role || "",
+            company: parsedData.company || "",
+            description: parsedData.description || "",
+            requirements: parsedData.requirements || "",
+            location: parsedData.location || "",
             salary: parsedData.salary || undefined
           }
         )
@@ -169,15 +205,15 @@ If information is not found, use null for that field. Be concise and accurate.`
         console.log(`[Parse Job URL] Fit score for ${parsedData.role} at ${parsedData.company}: ${jobFit.overall}%`)
       }
     } catch (error) {
-      console.error('[Parse Job URL] Error calculating fit score:', error)
+      console.error("[Parse Job URL] Error calculating fit score:", error)
     }
 
     return NextResponse.json({
       success: true,
       fitScore,
       data: {
-        company: parsedData.company || '',
-        role: parsedData.role || '',
+        company: parsedData.company || "",
+        role: parsedData.role || "",
         jobUrl: url,
         notes: [
           parsedData.location ? `Location: ${parsedData.location}` : null,
@@ -185,16 +221,16 @@ If information is not found, use null for that field. Be concise and accurate.`
           parsedData.description ? `Description: ${parsedData.description}` : null,
           parsedData.requirements ? `Requirements:\n${parsedData.requirements}` : null,
           parsedData.benefits ? `Benefits: ${parsedData.benefits}` : null,
-        ].filter(Boolean).join('\n\n'),
-        status: 'DRAFT'
+        ].filter(Boolean).join("\n\n"),
+        status: "DRAFT"
       }
     })
   } catch (error) {
-    console.error('Job URL parsing error:', error)
+    console.error("Job URL parsing error:", error)
     return NextResponse.json(
       {
-        error: 'Failed to parse job URL',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        error: "Failed to parse job URL",
+        details: error instanceof Error ? error.message : "Unknown error"
       },
       { status: 500 }
     )

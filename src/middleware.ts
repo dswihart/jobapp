@@ -1,27 +1,28 @@
-import { auth } from '@/lib/auth'
-import { NextResponse } from 'next/server'
+import { auth } from "@/lib/auth"
+import { NextResponse } from "next/server"
 
 export default auth((req) => {
   const isLoggedIn = !!req.auth
-  const isOnLoginPage = req.nextUrl.pathname.startsWith('/login')
-  const isOnRegisterPage = req.nextUrl.pathname.startsWith('/register')
-  const isOnAuthApi = req.nextUrl.pathname.startsWith('/api/auth')
-  const isOnMobileApi = req.nextUrl.pathname.startsWith('/api/mobile')
-  const isOnCronApi = req.nextUrl.pathname.startsWith('/api/cron')
+  const isOnLoginPage = req.nextUrl.pathname.startsWith("/login")
+  const isOnRegisterPage = req.nextUrl.pathname.startsWith("/register")
+  const isOnAuthApi = req.nextUrl.pathname.startsWith("/api/auth")
+  const isOnMobileApi = req.nextUrl.pathname.startsWith("/api/mobile")
+  const isOnCronApi = req.nextUrl.pathname.startsWith("/api/cron")
+  const isStaticFile = req.nextUrl.pathname.startsWith("/uploads")
 
-  // Allow access to auth pages, APIs, and cron endpoints
-  if (isOnLoginPage || isOnRegisterPage || isOnAuthApi || isOnMobileApi || isOnCronApi) {
+  // Allow access to auth pages, APIs, cron endpoints, and static uploads
+  if (isOnLoginPage || isOnRegisterPage || isOnAuthApi || isOnMobileApi || isOnCronApi || isStaticFile) {
     return NextResponse.next()
   }
 
   // Redirect to login if not authenticated
   if (!isLoggedIn) {
-    return NextResponse.redirect(new URL('/login', req.nextUrl))
+    return NextResponse.redirect(new URL("/login", req.nextUrl))
   }
 
   return NextResponse.next()
 })
 
 export const config = {
-  matcher: ['/((?!_next|.*?\\..*).*)'],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\..*).*)"],
 }

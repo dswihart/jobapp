@@ -20,66 +20,77 @@ export async function POST(request: Request) {
       where: { id: userId }
     })
 
-    // Prepare user data
-    const userData = {
-      name: extracted.name,
-      email: extracted.email || undefined,
-      resumeUrl: resumeUrl || undefined,
-
-      // Basic fields (keep for backward compatibility)
-      skills: [...extracted.primarySkills, ...extracted.secondarySkills],
-      experience: extracted.yearsOfExperience ? `${extracted.yearsOfExperience} years` : undefined,
-
-      // Enhanced fields
-      summary: extracted.summary,
-      location: extracted.location,
-      salaryExpectation: extracted.salaryExpectation,
-      workPreference: extracted.workPreference,
-      availability: extracted.availability,
-
-      yearsOfExperience: extracted.yearsOfExperience,
-      seniorityLevel: extracted.seniorityLevel,
-
-      education: extracted.education.map(e => `${e.degree} from ${e.institution}${e.year ? ` (${e.year})` : ""}`),
-
-      primarySkills: extracted.primarySkills,
-      secondarySkills: extracted.secondarySkills,
-      learningSkills: extracted.learningSkills,
-
-      jobTitles: extracted.jobTitles,
-      industries: extracted.industries,
-
-      workHistory: extracted.workHistory as unknown as Prisma.InputJsonValue,
-      extractedProfile: extracted as unknown as Prisma.InputJsonValue,
-      lastExtracted: new Date()
-    }
-
     // Check if email is already taken by a different user
-    let safeEmail = userData.email
+    let safeEmail = extracted.email || null
     if (safeEmail) {
       const emailOwner = await prisma.user.findUnique({
         where: { email: safeEmail }
       })
       // If email belongs to a different user, do not use it
       if (emailOwner && emailOwner.id !== userId) {
-        safeEmail = undefined
+        safeEmail = null
       }
     }
 
-    // Prepare create data (without conflicting email)
+    // For new users without a valid email, generate a placeholder
+    // (email is required in schema)
+    if (!existingUser && !safeEmail) {
+      safeEmail = `user-${userId}@placeholder.local`
+    }
+
+    // Prepare user data for update (email optional for existing users)
+    const updateData = {
+      name: extracted.name,
+      resumeUrl: resumeUrl || undefined,
+      skills: [...extracted.primarySkills, ...extracted.secondarySkills],
+      experience: extracted.yearsOfExperience ? `${extracted.yearsOfExperience} years` : undefined,
+      summary: extracted.summary,
+      location: extracted.location,
+      salaryExpectation: extracted.salaryExpectation,
+      workPreference: extracted.workPreference,
+      availability: extracted.availability,
+      yearsOfExperience: extracted.yearsOfExperience,
+      seniorityLevel: extracted.seniorityLevel,
+      education: extracted.education.map(e => `${e.degree} from ${e.institution}${e.year ? ` (${e.year})` : ""}`),
+      primarySkills: extracted.primarySkills,
+      secondarySkills: extracted.secondarySkills,
+      learningSkills: extracted.learningSkills,
+      jobTitles: extracted.jobTitles,
+      industries: extracted.industries,
+      workHistory: extracted.workHistory as unknown as Prisma.InputJsonValue,
+      extractedProfile: extracted as unknown as Prisma.InputJsonValue,
+      lastExtracted: new Date(),
+      // Only update email if we have a valid one and user exists
+      ...(existingUser && safeEmail ? { email: safeEmail } : {})
+    }
+
+    // Prepare create data (email required for new users)
     const createData = {
       id: userId,
-      ...userData,
-      email: safeEmail
+      email: safeEmail as string, // Will be placeholder if no real email
+      name: extracted.name,
+      resumeUrl: resumeUrl || undefined,
+      skills: [...extracted.primarySkills, ...extracted.secondarySkills],
+      experience: extracted.yearsOfExperience ? `${extracted.yearsOfExperience} years` : undefined,
+      summary: extracted.summary,
+      location: extracted.location,
+      salaryExpectation: extracted.salaryExpectation,
+      workPreference: extracted.workPreference,
+      availability: extracted.availability,
+      yearsOfExperience: extracted.yearsOfExperience,
+      seniorityLevel: extracted.seniorityLevel,
+      education: extracted.education.map(e => `${e.degree} from ${e.institution}${e.year ? ` (${e.year})` : ""}`),
+      primarySkills: extracted.primarySkills,
+      secondarySkills: extracted.secondarySkills,
+      learningSkills: extracted.learningSkills,
+      jobTitles: extracted.jobTitles,
+      industries: extracted.industries,
+      workHistory: extracted.workHistory as unknown as Prisma.InputJsonValue,
+      extractedProfile: extracted as unknown as Prisma.InputJsonValue,
+      lastExtracted: new Date()
     }
 
-    // Prepare update data (without conflicting email)
-    const updateData = {
-      ...userData,
-      email: safeEmail
-    }
-
-    // Upsert user profile in database (create if does not exist, update if exists)
+    // Upsert user profile in database
     await prisma.user.upsert({
       where: { id: userId },
       create: createData,
