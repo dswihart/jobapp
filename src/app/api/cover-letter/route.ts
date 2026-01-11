@@ -1,14 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { generateCoverLetter } from '@/lib/cover-letter-service'
-import { auth } from '@/lib/auth'
-import * as cheerio from 'cheerio'
+import { NextRequest, NextResponse } from "next/server"
+import { prisma } from "@/lib/prisma"
+import { generateCoverLetter } from "@/lib/cover-letter-service"
+import { auth } from "@/lib/auth"
+import * as cheerio from "cheerio"
+import { readFile } from "fs/promises"
+import path from "path"
+import mammoth from "mammoth"
 
 async function fetchJobDescription(url: string): Promise<string> {
   try {
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     })
     
@@ -19,23 +22,21 @@ async function fetchJobDescription(url: string): Promise<string> {
     const html = await response.text()
     const $ = cheerio.load(html)
     
-    // Remove script and style tags
-    $('script').remove()
-    $('style').remove()
+    $("script").remove()
+    $("style").remove()
     
-    // Try to extract job description from common selectors
     const selectors = [
-      '.job-description',
-      '#job-description', 
-      '[class*="description"]',
-      '[id*="description"]',
-      'article',
-      'main',
-      '.content',
-      'body'
+      ".job-description",
+      "#job-description", 
+      "[class*=\"description\"]",
+      "[id*=\"description\"]",
+      "article",
+      "main",
+      ".content",
+      "body"
     ]
     
-    let description = ''
+    let description = ""
     for (const selector of selectors) {
       const element = $(selector)
       if (element.length > 0) {
@@ -46,22 +47,42 @@ async function fetchJobDescription(url: string): Promise<string> {
       }
     }
     
-    // Clean up the description
     description = description
-      .replace(/\s+/g, ' ')
-      .replace(/\n+/g, '\n')
+      .replace(/\s+/g, " ")
+      .replace(/\n+/g, "\n")
       .trim()
-      .substring(0, 5000) // Limit to 5000 characters
+      .substring(0, 5000)
     
-    return description || 'Job description not available'
+    return description || "Job description not available"
   } catch (error) {
-    console.error('Error fetching job description:', error)
-    return 'Job description could not be fetched'
+    console.error("Error fetching job description:", error)
+    return "Job description could not be fetched"
   }
 }
 
+async function readResumeContent(fileUrl: string, fileType: string): Promise<string> {
+  try {
+    const sanitizedPath = fileUrl.startsWith("/") ? fileUrl.slice(1) : fileUrl
+    const filepath = path.join(process.cwd(), "public", sanitizedPath)
+    
+    if (fileType === "text/plain") {
+      return await readFile(filepath, "utf-8")
+    } else if (
+      fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+      fileType === "application/msword"
+    ) {
+      const result = await mammoth.extractRawText({ path: filepath })
+      return result.value
+    } else {
+      // Try reading as text
+      return await readFile(filepath, "utf-8")
+    }
+  } catch (error) {
+    console.error("Error reading resume content:", error)
+    return ""
+  }
+}
 
-// GET /api/cover-letter - List all cover letters for the current user
 export async function GET() {
   try {
     const session = await auth()
@@ -99,7 +120,7 @@ export async function POST(request: NextRequest) {
     
     if (!session?.user?.id) {
       return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
+        { success: false, error: "Unauthorized" },
         { status: 401 }
       )
     }
@@ -108,19 +129,22 @@ export async function POST(request: NextRequest) {
 
     if (!applicationId || !company || !role) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: applicationId, company, role' },
+        { success: false, error: "Missing required fields: applicationId, company, role" },
         { status: 400 }
       )
     }
 
-    // Verify the application belongs to this user
+    // Verify the application belongs to this user AND include attached resume
     const application = await prisma.application.findUnique({
-      where: { id: applicationId }
+      where: { id: applicationId },
+      include: {
+        resume: true
+      }
     })
 
     if (!application || application.userId !== session.user.id) {
       return NextResponse.json(
-        { success: false, error: 'Application not found' },
+        { success: false, error: "Application not found" },
         { status: 404 }
       )
     }
@@ -132,7 +156,7 @@ export async function POST(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json(
-        { success: false, error: 'User not found' },
+        { success: false, error: "User not found" },
         { status: 404 }
       )
     }
@@ -149,17 +173,38 @@ export async function POST(request: NextRequest) {
       jobDescription = `Position: ${role} at ${company}`
     }
 
-    // Generate cover letter
+    // Get resume content - prefer application-specific resume, fallback to user profile
+    let resumeContent = ""
+    let workHistoryData = ""
+    let skillsData: string[] = user.primarySkills || []
+
+    if (application.resume) {
+      console.log(`Reading resume attached to application: ${application.resume.fileName}`)
+      resumeContent = await readResumeContent(application.resume.fileUrl, application.resume.fileType)
+      if (resumeContent) {
+        console.log(`Successfully read resume content, length: ${resumeContent.length}`)
+        workHistoryData = resumeContent
+      }
+    }
+
+    // Fallback to user profile if no resume content
+    if (!workHistoryData && user.workHistory) {
+      workHistoryData = typeof user.workHistory === "string" 
+        ? user.workHistory 
+        : JSON.stringify(user.workHistory)
+    }
+
+    // Generate cover letter with resume content
     const coverLetter = await generateCoverLetter({
       jobTitle: role,
       company: company,
       jobDescription: jobDescription,
       userProfile: {
-        name: user.name || 'Job Seeker',
-        email: user.email || '',
+        name: user.name || "Job Seeker",
+        email: user.email || "",
         yearsOfExperience: user.yearsOfExperience || 0,
-        primarySkills: user.primarySkills || [],
-        workHistory: typeof user.workHistory === 'string' ? user.workHistory : undefined
+        primarySkills: skillsData,
+        workHistory: workHistoryData
       }
     })
 
@@ -168,11 +213,11 @@ export async function POST(request: NextRequest) {
       coverLetter
     })
   } catch (error) {
-    console.error('Cover letter generation error:', error)
+    console.error("Cover letter generation error:", error)
     return NextResponse.json(
       { 
         success: false, 
-        error: error instanceof Error ? error.message : 'Failed to generate cover letter' 
+        error: error instanceof Error ? error.message : "Failed to generate cover letter" 
       },
       { status: 500 }
     )
