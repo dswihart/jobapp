@@ -216,21 +216,6 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
   "trendingSkillsNeeded": ["Trending skills from the job they should consider learning"]
 }
 
-**Cybersecurity Domain Knowledge:**
-- SIEM tools are interchangeable: Splunk, ELK/Elastic, Microsoft Sentinel, QRadar, Datadog Security, Grafana/Prometheus (security monitoring)
-- EDR/XDR platforms: CrowdStrike Falcon, SentinelOne, Carbon Black, Microsoft Defender for Endpoint, Cortex XDR
-- IAM/PAM solutions: CyberArk, Okta, Azure AD/Entra ID, SailPoint, BeyondTrust, Thales
-- DLP tools: Microsoft Purview, Symantec DLP, Digital Guardian, Forcepoint
-- Cloud security: AWS Security Hub, Azure Security Center, GCP Security Command Center, Prisma Cloud, Wiz, Orca
-- Vulnerability management: Qualys, Nessus/Tenable, Rapid7, Snyk, Trivy
-- Network security: Palo Alto, Fortinet, Check Point, Cisco ASA, WAF (Imperva, Cloudflare, AWS WAF)
-- GRC/Compliance frameworks are transferable: GDPR, PCI-DSS, HIPAA, SOX, ISO 27001, NIST, SOC2, CCPA, NYDFS
-- Security role hierarchy (ascending): SOC Analyst -> Security Engineer -> Senior Security Engineer -> Security Architect -> CISO/Director of Security
-- Adjacent security roles ARE strong matches: DevSecOps, SRE (with security focus), Cloud Security Engineer, Platform Security, AppSec Engineer
-- Certifications indicate domain expertise even if not listed: CISSP, CISM, CEH, CompTIA Security+, OSCP, GIAC certs
-- If a candidate has infrastructure security skills (Terraform, Kubernetes, Docker, AWS), they match cloud security roles
-- If a candidate has compliance skills (GDPR, PCI-DSS), they match GRC and audit roles
-
 **Scoring Guidelines:**
 - skillMatch: Match required skills with flexibility for transferable abilities (primary=100%, secondary=80%, learning=50%, related/adjacent=70%)
 - experienceMatch: Years of experience match (within range=100, ±3 years=85, ±7 years=65, any relevant=45)

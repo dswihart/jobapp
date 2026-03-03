@@ -6,7 +6,7 @@
 import { PrismaClient } from '@prisma/client'
 import { analyzeJobFitEnhanced } from './ai-service'
 import { calculateRejectionPenalty } from './pattern-learning-service'
-import { getEnabledSources } from './sources'
+// Hardcoded sources removed - all sources are DB-driven via user_job_sources
 
 import { fetchFromUserSources } from './user-sources-fetcher'
 import { extractSkillsFromJob, saveSkillsToDatabase } from './skill-service'
@@ -235,45 +235,14 @@ export async function monitorJobBoards(userId: string): Promise<number> {
 }
 async function fetchFromAllSources(userId: string, skills: string[]): Promise<JobPosting[]> {
   const allJobs: JobPosting[] = []
-  const sourceCounts: Record<string, number> = {}
 
-  // Fetch from user-configured sources
+  // Fetch from user-configured DB sources (the only source system now)
   try {
     const userJobs = await fetchFromUserSources(userId, skills)
-    console.log(`[Job Aggregator] Found ${userJobs.length} jobs from user sources`)
+    console.log('[Job Aggregator] Found ' + userJobs.length + ' jobs from user sources')
     allJobs.push(...userJobs)
   } catch (error) {
     console.error('[Job Aggregator] Error fetching user sources:', error)
-  }
-
-  // Fetch from hardcoded sources
-  const enabledSources = getEnabledSources()
-  console.log(`[Job Aggregator] Scanning ${enabledSources.length} enabled sources...`)
-
-  for (const source of enabledSources) {
-    try {
-      console.log(`[${source.config.name}] Fetching jobs...`)
-      const jobs = await source.fetchJobs(skills, 50)
-
-      // Map to include source name
-      const jobsWithSource = jobs.map(job => ({
-        ...job,
-        source: source.config.name
-      }))
-
-      sourceCounts[source.config.name] = jobsWithSource.length
-      allJobs.push(...jobsWithSource)
-      console.log(`[${source.config.name}] Filtered to ${jobsWithSource.length} relevant jobs`)
-    } catch (error) {
-      console.error(`[${source.config.name}] Error fetching jobs:`, error)
-      sourceCounts[source.config.name] = 0
-    }
-  }
-
-  // Log summary
-  console.log(`[Job Aggregator] Summary:`)
-  for (const [sourceName, count] of Object.entries(sourceCounts)) {
-    console.log(`  - ${sourceName}: ${count} jobs`)
   }
 
   // Remove duplicates by jobUrl
@@ -281,98 +250,10 @@ async function fetchFromAllSources(userId: string, skills: string[]): Promise<Jo
     new Map(allJobs.map(job => [job.jobUrl, job])).values()
   )
 
-  console.log(`[Job Aggregator] Summary:`)
-  console.log(`  - Total: ${allJobs.length} jobs (${uniqueJobs.length} unique)`)
-  console.log(`  - Time: ${Date.now() / 1000}s`)
+  console.log('[Job Aggregator] Summary:')
+  console.log('  - Total: ' + allJobs.length + ' jobs (' + uniqueJobs.length + ' unique)')
 
   return uniqueJobs
-}
-
-async function fetchJobPostings(skills: string[]): Promise<JobPosting[]> {
-  try {
-    console.log('[Remotive API] Fetching jobs...')
-
-    const response = await fetch('https://remotive.com/api/remote-jobs?limit=50', {
-      headers: {
-        'Accept': 'application/json'
-      }
-    })
-
-    if (!response.ok) {
-      throw new Error(`Remotive API error: ${response.status} ${response.statusText}`)
-    }
-
-    const data = await response.json()
-
-    if (!data.jobs || !Array.isArray(data.jobs)) {
-      throw new Error('Invalid response format from Remotive API')
-    }
-
-    console.log(`[Remotive API] Received ${data.jobs.length} total jobs`)
-
-    const jobs: JobPosting[] = data.jobs
-      .filter((job: RemotiveJob) => {
-        const jobText = `${job.title} ${job.description} ${job.category}`.toLowerCase()
-        const hasSkillMatch = skills.some(skill =>
-          jobText.includes(skill.toLowerCase())
-        )
-
-        const isRecent = new Date(job.publication_date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-
-        return hasSkillMatch && isRecent
-      })
-      .slice(0, 20)
-      .map((job: RemotiveJob) => ({
-        title: job.title,
-        company: job.company_name,
-        description: job.description,
-        requirements: job.tags.join(', '),
-        location: job.candidate_required_location || 'Remote',
-        salary: job.salary || undefined,
-        jobUrl: job.url,
-        postedDate: new Date(job.publication_date)
-      }))
-
-    console.log(`[Remotive API] Filtered to ${jobs.length} relevant jobs matching skills`)
-
-    return jobs
-
-  } catch (error) {
-    console.error('[Remotive API] Error fetching jobs:', error)
-
-    console.log('[Remotive API] Falling back to sample jobs for testing')
-    return getSampleJobs(skills)
-  }
-}
-
-function getSampleJobs(skills: string[]): JobPosting[] {
-  const sampleJobs: JobPosting[] = [
-    {
-      title: 'Senior Full Stack Developer',
-      company: 'Tech Corp',
-      description: 'We are seeking an experienced Full Stack Developer to join our growing team. You will work with React, Node.js, and PostgreSQL to build scalable web applications.',
-      requirements: 'React, Node.js, TypeScript, PostgreSQL, 5+ years experience',
-      location: 'Remote',
-      salary: '$120k-$150k',
-      jobUrl: 'https://example.com/jobs/senior-full-stack-' + Date.now(),
-      postedDate: new Date()
-    },
-    {
-      title: 'Frontend Engineer',
-      company: 'StartupXYZ',
-      description: 'Join our team building next-generation user interfaces with React and TypeScript.',
-      requirements: 'React, TypeScript, CSS, 3+ years experience',
-      location: 'San Francisco, CA',
-      salary: '$100k-$130k',
-      jobUrl: 'https://example.com/jobs/frontend-engineer-' + Date.now(),
-      postedDate: new Date()
-    }
-  ]
-
-  return sampleJobs.filter(job => {
-    const jobText = `${job.title} ${job.description} ${job.requirements || ''}`.toLowerCase()
-    return skills.some(skill => jobText.includes(skill.toLowerCase()))
-  })
 }
 
 export async function getUnreadAlerts(userId: string) {

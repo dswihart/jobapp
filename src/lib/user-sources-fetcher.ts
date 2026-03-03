@@ -25,6 +25,7 @@ interface JobPosting {
 
 /**
  * Fetch jobs from user-specific sources
+ * NOTE: No pre-AI skill filter - AI fit-score handles all quality filtering
  */
 export async function fetchFromUserSources(
   userId: string,
@@ -67,29 +68,49 @@ export async function fetchFromUserSources(
             source.descriptionSelector || undefined
           )
         } else if (!source.feedUrl && !source.apiEndpoint && !source.scrapeUrl) {
-          // Source has no URL configured - skip silently
+          continue
         } else {
           console.log(`[${source.name}] Unsupported source type: ${source.sourceType}`)
+          continue
         }
 
         console.log(`[${source.name}] Fetched ${jobs.length} jobs`)
+
+        // Apply per-source searchKeywords filter if configured
+        const searchKeywords = source.searchKeywords || []
+        if (searchKeywords.length > 0) {
+          const before = jobs.length
+          jobs = jobs.filter((job) => {
+            const jobText =
+              `${job.title} ${job.description} ${job.requirements || ""}`.toLowerCase()
+            return searchKeywords.some((kw: string) => jobText.includes(kw.toLowerCase()))
+          })
+          console.log(`[${source.name}] searchKeywords filter: ${before} -> ${jobs.length} jobs`)
+        }
+
+        // Apply per-source excludeKeywords filter if configured
+        const excludeKeywords = source.excludeKeywords || []
+        if (excludeKeywords.length > 0) {
+          const before = jobs.length
+          jobs = jobs.filter((job) => {
+            const jobText =
+              `${job.title} ${job.description} ${job.requirements || ""}`.toLowerCase()
+            return !excludeKeywords.some((kw: string) => jobText.includes(kw.toLowerCase()))
+          })
+          console.log(`[${source.name}] excludeKeywords filter: ${before} -> ${jobs.length} jobs`)
+        }
+
         allJobs.push(...jobs)
       } catch (error) {
         console.error(`[${source.name}] Error fetching jobs:`, error)
       }
     }
 
-    // Filter jobs based on skills
-    const filteredJobs = allJobs.filter((job) => {
-      const jobText =
-        `${job.title} ${job.description} ${job.requirements || ""}`.toLowerCase()
-      return skills.some((skill) => jobText.includes(skill.toLowerCase()))
-    })
-
+    // No pre-AI skill filter - let AI fit-score handle matching
     console.log(
-      `[User Sources] Filtered ${allJobs.length} jobs to ${filteredJobs.length} matching jobs`
+      `[User Sources] Returning all ${allJobs.length} jobs (AI fit-score will filter)`
     )
-    return filteredJobs
+    return allJobs
   } catch (error) {
     console.error("[User Sources] Error fetching from user sources:", error)
     return []
@@ -143,9 +164,6 @@ async function fetchFromRSS(
   }
 }
 
-/**
- * Parse JSON feed (RSS.app format)
- */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseJSONFeed(data: any, sourceName: string): JobPosting[] {
   if (!data.items || !Array.isArray(data.items)) {
@@ -156,7 +174,6 @@ function parseJSONFeed(data: any, sourceName: string): JobPosting[] {
     let title = item.title || "Untitled"
     let company = "Unknown Company"
 
-    // Try to parse "Title at Company" format
     const atMatch = title.split(" at ")
     if (atMatch.length > 1) {
       title = atMatch[0].trim()
@@ -185,9 +202,6 @@ function parseJSONFeed(data: any, sourceName: string): JobPosting[] {
   })
 }
 
-/**
- * Parse XML RSS feed
- */
 function parseXMLFeed(xmlText: string, sourceName: string): JobPosting[] {
   const jobs: JobPosting[] = []
   const itemRegex = /<item>([\s\S]*?)<\/item>/g
@@ -201,19 +215,17 @@ function parseXMLFeed(xmlText: string, sourceName: string): JobPosting[] {
     const description = extractTag(itemContent, "description")
     const pubDate = extractTag(itemContent, "pubDate")
 
-    // Extract company from various RSS formats
     const company =
-      extractTag(itemContent, "company") || // RemoteOK format
-      extractTag(itemContent, "dc:creator") || // Foorilla/Dublin Core format
-      extractTag(itemContent, "himalayasJobs:companyName") || // Himalayas format
+      extractTag(itemContent, "company") ||
+      extractTag(itemContent, "dc:creator") ||
+      extractTag(itemContent, "himalayasJobs:companyName") ||
       parseCompanyFromTitle(title) ||
       "Unknown Company"
 
-    // Extract location from various formats
     const location =
-      extractTag(itemContent, "location") || // RemoteOK format
-      extractTag(itemContent, "region") || // WeWorkRemotely format
-      extractTag(itemContent, "himalayasJobs:locationRestriction") || // Himalayas
+      extractTag(itemContent, "location") ||
+      extractTag(itemContent, "region") ||
+      extractTag(itemContent, "himalayasJobs:locationRestriction") ||
       undefined
 
     if (title && link) {
@@ -233,11 +245,7 @@ function parseXMLFeed(xmlText: string, sourceName: string): JobPosting[] {
   return jobs
 }
 
-/**
- * Try to extract company name from title formats like "Company: Title" or "Title at Company"
- */
 function parseCompanyFromTitle(title: string): string | undefined {
-  // "Company: Title" format (WeWorkRemotely)
   const colonMatch = title.match(/^(.+?):\s+/)
   if (colonMatch && colonMatch[1].length < 50) {
     return colonMatch[1].trim()
@@ -245,13 +253,8 @@ function parseCompanyFromTitle(title: string): string | undefined {
   return undefined
 }
 
-/**
- * Extract XML tag content - handles CDATA sections and namespaced tags
- */
 function extractTag(content: string, tagName: string): string {
-  // Escape special regex characters in tag name (but allow : for namespaced tags)
   const escapedTag = tagName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  // Match tag with optional attributes, handling both CDATA and plain text content
   const regex = new RegExp(
     "<" +
       escapedTag +
@@ -265,9 +268,6 @@ function extractTag(content: string, tagName: string): string {
   return (match[1] || match[2] || "").trim()
 }
 
-/**
- * Decode HTML entities
- */
 function decodeHtml(text: string): string {
   return text
     .replace(/&amp;/g, "&")
@@ -281,9 +281,6 @@ function decodeHtml(text: string): string {
     .trim()
 }
 
-/**
- * Fetch from API endpoint
- */
 async function fetchFromAPI(
   endpoint: string,
   apiKey: string | undefined,
@@ -308,9 +305,6 @@ async function fetchFromAPI(
 
     const data = await response.json()
 
-    // Handle Remotive API format: { jobs: [...] }
-    // Handle Arbeitnow API format: { data: [...] }
-    // Handle plain array format: [...]
     const jobsArray = Array.isArray(data)
       ? data
       : data.jobs || data.data || []
@@ -340,9 +334,6 @@ async function fetchFromAPI(
   }
 }
 
-/**
- * Fetch from web scraping using Cheerio
- */
 async function fetchFromWebScrape(
   scrapeUrl: string,
   sourceName: string,
@@ -369,7 +360,6 @@ async function fetchFromWebScrape(
 
     const jobs: JobPosting[] = []
 
-    // Use provided selectors or fall back to common patterns
     const containerSel = scrapeSelector || ".job-listing, .job-card, .job-item, [data-job-id], .job, .posting"
     const titleSel = titleSelector || "h2, h3, .title, .job-title"
     const companySel = companySelector || ".company, .company-name, .employer"
@@ -384,19 +374,16 @@ async function fetchFromWebScrape(
 
       const company = $el.find(companySel).first().text().trim() || "Unknown Company"
 
-      // Get the link - try the link selector, then any anchor on the element
       let jobUrl = ""
       const linkEl = $el.find(linkSel).first()
       if (linkEl.length) {
         jobUrl = linkEl.attr("href") || ""
       }
       if (!jobUrl) {
-        // Try the container itself if it's an anchor
         jobUrl = $el.is("a") ? ($el.attr("href") || "") : ""
       }
       if (!jobUrl) return
 
-      // Make relative URLs absolute
       if (jobUrl.startsWith("/")) {
         const urlObj = new URL(scrapeUrl)
         jobUrl = `${urlObj.origin}${jobUrl}`
