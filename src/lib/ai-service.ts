@@ -160,17 +160,23 @@ export async function analyzeJobFitEnhanced(
 `
     }
 
-    const prompt = `You are an expert career advisor and job matching AI. Analyze how well this SPECIFIC candidate matches the job posting.
+    const prompt = `You are a strict job matching AI. Score how well this candidate matches the job posting. Be ACCURATE, not encouraging.
 
-**CRITICAL MATCHING RULES:**
-1. The candidate's job titles MUST align with the role (e.g., "Security Engineer" should NOT match "Data Engineer" or "Legal" roles)
-   - If job is in DIFFERENT domain than candidate preferred titles → titleMatch ≤25, overall ≤30
-3. If the job title/role is completely different from the candidate's preferred titles, the match should be LOW (<40%)
-4. **LOCATION IS CRITICAL - STRICT ENFORCEMENT**:
-   - Candidate requires: "Remote or Hybrid in Barcelona, Spain"
-   - If job location is USA, Egypt, India, Asia, etc. → locationMatch=0, overall must be ≤30
-   - ONLY accept: Remote, Barcelona, Spain, or Europe Remote
-   - Any violation = immediate disqualification
+**CANDIDATE'S CORE IDENTITY: CYBERSECURITY & INFORMATION SECURITY**
+This candidate is a cybersecurity professional. Their DevOps/cloud skills (Terraform, Kubernetes, Docker) are TOOLS they use in security contexts, NOT their career focus. Do NOT match them with pure DevOps, pure development, or pure infrastructure roles.
+
+**HARD DISQUALIFICATION RULES (override everything else):**
+1. **ROLE DOMAIN CHECK** - The job MUST have a security/compliance/SRE component:
+   - Pure DevOps (no security mentioned) → titleMatch ≤20, overall ≤30
+   - Pure Software Engineering/Backend/Frontend → titleMatch ≤15, overall ≤25
+   - Pure Data Engineering/ML/AI → titleMatch ≤15, overall ≤25
+   - IT Support/Helpdesk/IT Operations → titleMatch ≤15, overall ≤25
+   - Sales/Marketing/HR/Legal/Product → titleMatch ≤10, overall ≤15
+   - ONLY these domains qualify for high scores: cybersecurity, information security, cloud security, DevSecOps, SRE, GRC/compliance, DLP, IAM/PAM, SOC, incident response, security architecture, CISO
+2. **LOCATION CHECK**:
+   - Candidate requires: Remote or Barcelona/Spain/Europe
+   - USA-only, Asia-only, etc. → locationMatch=0, overall ≤30
+3. **"DevOps" IS NOT "Security"** - A job titled "DevOps Engineer" that only mentions CI/CD, deployments, and infrastructure with NO security responsibilities is NOT a match. The job must explicitly involve security tasks (threat detection, vulnerability management, compliance, access control, incident response, etc.)
 
 **Candidate Profile:**
 - Primary Skills (Core Expertise): ${userProfile.primarySkills.join(', ')}
@@ -179,10 +185,10 @@ export async function analyzeJobFitEnhanced(
 - Years of Experience: ${userProfile.yearsOfExperience || 'Unknown'}
 - Seniority Level: ${userProfile.seniorityLevel || 'Unknown'}
 - Recent Roles: ${userProfile.workHistory?.slice(0, 3).map(w => w.role).join(', ') || 'Not provided'}
-- **Preferred Job Titles (MUST MATCH)**: ${userProfile.jobTitles?.join(', ') || 'Any'}
+- **Preferred Job Titles**: ${userProfile.jobTitles?.join(', ') || 'Any'}
 - Target Industries: ${userProfile.industries?.join(', ') || 'Any'}
-- **Work Preference (LOCATION CONSTRAINT)**: ${userProfile.workPreference || 'Not specified'}
-- **Preferred Countries/Locations (LOCATION FILTER)**: ${userProfile.preferredCountries?.join(", ") || "Any"}
+- **Work Preference**: ${userProfile.workPreference || 'Not specified'}
+- **Preferred Locations**: ${userProfile.preferredCountries?.join(", ") || "Any"}
 - Professional Summary: ${userProfile.summary || 'Not provided'}
 ${skillDemandSection}
 **Job Posting:**
@@ -197,7 +203,7 @@ ${jobDescription.description}
 ${jobDescription.requirements ? `Requirements:\n${jobDescription.requirements}` : ''}
 
 **Analysis Task:**
-Provide a comprehensive match analysis as a JSON object with this exact structure:
+Return a JSON object with this exact structure:
 {
   "overall": 0-100,
   "skillMatch": 0-100,
@@ -206,66 +212,54 @@ Provide a comprehensive match analysis as a JSON object with this exact structur
   "titleMatch": 0-100,
   "industryMatch": 0-100,
   "locationMatch": 0-100,
-  "reasoning": "2-3 sentences explaining the overall match quality",
-  "matchedSkills": ["Skills from their profile that match the job - be comprehensive"],
-  "missingSkills": ["Required skills they don't have or need to improve"],
-  "recommendations": ["Specific advice for applying or improving candidacy"],
-  "strengths": ["Their key advantages for this role"],
-  "concerns": ["Potential weaknesses or gaps to address"],
-  "highDemandMatches": ["Which of their matching skills are high-demand in the market"],
-  "trendingSkillsNeeded": ["Trending skills from the job they should consider learning"]
+  "reasoning": "2-3 sentences explaining the match quality",
+  "matchedSkills": ["matching skills"],
+  "missingSkills": ["required skills they lack"],
+  "recommendations": ["advice for applying"],
+  "strengths": ["key advantages"],
+  "concerns": ["gaps to address"],
+  "highDemandMatches": ["high-demand matching skills"],
+  "trendingSkillsNeeded": ["trending skills to learn"]
 }
 
 **Cybersecurity Domain Knowledge:**
-- SIEM tools are interchangeable: Splunk, ELK/Elastic, Microsoft Sentinel, QRadar, Datadog Security, Grafana/Prometheus (security monitoring)
-- EDR/XDR platforms: CrowdStrike Falcon, SentinelOne, Carbon Black, Microsoft Defender for Endpoint, Cortex XDR
-- IAM/PAM solutions: CyberArk, Okta, Azure AD/Entra ID, SailPoint, BeyondTrust, Thales
-- DLP tools: Microsoft Purview, Symantec DLP, Digital Guardian, Forcepoint
-- Cloud security: AWS Security Hub, Azure Security Center, GCP Security Command Center, Prisma Cloud, Wiz, Orca
-- Vulnerability management: Qualys, Nessus/Tenable, Rapid7, Snyk, Trivy
-- Network security: Palo Alto, Fortinet, Check Point, Cisco ASA, WAF (Imperva, Cloudflare, AWS WAF)
-- GRC/Compliance frameworks are transferable: GDPR, PCI-DSS, HIPAA, SOX, ISO 27001, NIST, SOC2, CCPA, NYDFS
-- Security role hierarchy (ascending): SOC Analyst -> Security Engineer -> Senior Security Engineer -> Security Architect -> CISO/Director of Security
-- Adjacent security roles ARE strong matches: DevSecOps, SRE (with security focus), Cloud Security Engineer, Platform Security, AppSec Engineer
-- Certifications indicate domain expertise even if not listed: CISSP, CISM, CEH, CompTIA Security+, OSCP, GIAC certs
-- If a candidate has infrastructure security skills (Terraform, Kubernetes, Docker, AWS), they match cloud security roles
-- If a candidate has compliance skills (GDPR, PCI-DSS), they match GRC and audit roles
+- SIEM: Splunk, ELK/Elastic, Sentinel, QRadar, Datadog Security
+- EDR/XDR: CrowdStrike Falcon, SentinelOne, Carbon Black, Defender for Endpoint, Cortex XDR
+- IAM/PAM: CyberArk, Okta, Entra ID, SailPoint, BeyondTrust
+- DLP: Microsoft Purview, Symantec DLP, Digital Guardian, Forcepoint
+- Cloud security: AWS Security Hub, Azure Security Center, GCP SCC, Prisma Cloud, Wiz, Orca
+- Vuln mgmt: Qualys, Nessus/Tenable, Rapid7, Snyk, Trivy
+- Network security: Palo Alto, Fortinet, Check Point, WAF (Imperva, Cloudflare)
+- GRC: GDPR, PCI-DSS, HIPAA, SOX, ISO 27001, NIST, SOC2
+- These tools ARE interchangeable within their category
 
-**Scoring Guidelines:**
-- skillMatch: Match required skills with flexibility for transferable abilities (primary=100%, secondary=80%, learning=50%, related/adjacent=70%)
-- experienceMatch: Years of experience match (within range=100, ±3 years=85, ±7 years=65, any relevant=45)
-- seniorityMatch: Level match with growth consideration (exact=100, one off=85, growth opportunity=75)
-- titleMatch: Job title relevance to candidate's background (exact=100, related field=85, adjacent=70, transferable=55, growth=50)
-- industryMatch: Industry compatibility (same=100, adjacent=85, transferable=70, new field with relevant skills=55)
-- locationMatch: Location compatibility based on preferences
-  * 100: Remote/Worldwide OR matches preferredCountries
-  * 85: Same region as preferredCountries
-  * 70: Offers relocation to preferredCountries
-  * 50: Remote option available
-  * 30: Different location but role is exceptional fit
-  * 0: Non-remote USA/Asia/etc. when candidate needs Europe/Remote
-- overall: Balanced scoring emphasizing potential and transferability
+**GOOD matches (security-focused roles):**
+- Cloud Security Engineer, Security Architect, CISO, InfoSec Engineer
+- DevSecOps Engineer, Security Operations, SOC Engineer
+- DLP Engineer, IAM/PAM Engineer, GRC Analyst
+- SRE with security responsibilities, Compliance Engineer
+- Penetration Tester, Vulnerability Manager, Threat Analyst
 
-**Overall Formula - Emphasize Skills & Growth:**
-- Core Capabilities: 55% (skills 40% + experience 15%)
-- Role Alignment: 30% (title 20% + seniority 10%)
-- Context Fit: 15% (location 10% + industry 5%)
+**BAD matches (no security component):**
+- DevOps Engineer (pure CI/CD), Backend Developer, Frontend Developer
+- Data Engineer, ML Engineer, AI Developer, Software Architect
+- IT Support, IT Operations (generic), Systems Administrator (generic)
+- Product Manager, Scrum Master, QA Engineer
 
-**Matching Philosophy - Be Encouraging:**
-- Recognize transferable skills (security→cloud security, backend→fullstack, etc.)
-- Value learning trajectory and secondary skills heavily
-- Consider career growth and stretch opportunities
-- Tech skills are highly transferable (AWS↔Azure, React↔Vue, Python↔Go)
-- Don't penalize for keyword mismatches if core skills align
-- Focus on "Can they succeed?" not "Perfect keyword match?"
-- If someone has 70%+ of core skills, that's a strong match
+**Scoring Formula:**
+- Role Alignment: 40% (titleMatch 30% + seniorityMatch 10%)
+- Skills: 35% (skillMatch)
+- Experience: 10% (experienceMatch)
+- Context: 15% (locationMatch 10% + industryMatch 5%)
 
-**Important:**
-- Be realistic but encouraging
-- Highlight transferable skills
-- Consider career growth opportunities
-- Note which skills are high-demand in the current market
-- Return ONLY valid JSON, no markdown or extra text`
+**Scoring Calibration:**
+- 80-100: Perfect match - security role, right seniority, matching skills, good location
+- 60-79: Strong match - security-adjacent role with clear security component
+- 40-59: Possible match - some security overlap but not primary focus
+- 20-39: Weak match - different domain, some transferable skills
+- 0-19: No match - completely different field
+
+Return ONLY valid JSON, no markdown or extra text`
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
