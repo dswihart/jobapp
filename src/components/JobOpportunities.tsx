@@ -1,6 +1,13 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { BriefcaseIcon, ArrowTopRightOnSquareIcon, SparklesIcon, FunnelIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import {
+  BriefcaseIcon,
+  ArrowTopRightOnSquareIcon,
+  SparklesIcon,
+  FunnelIcon,
+  CheckCircleIcon,
+  ArrowPathIcon,
+} from '@heroicons/react/24/outline'
 
 interface JobOpportunity {
   id: string
@@ -33,6 +40,23 @@ const extractDomain = (url: string): string => {
   }
 }
 
+// Source badge colors
+const sourceColors: Record<string, string> = {
+  'RemoteOK': 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400',
+  'Remotive': 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400',
+  'WeWorkRemotely': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400',
+  'Himalayas': 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400',
+  'EchoJobs': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/20 dark:text-indigo-400',
+  'Arbeitnow': 'bg-pink-100 text-pink-700 dark:bg-pink-900/20 dark:text-pink-400',
+}
+
+const getSourceColor = (source: string): string => {
+  for (const [key, color] of Object.entries(sourceColors)) {
+    if (source.toLowerCase().includes(key.toLowerCase())) return color
+  }
+  return 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+}
+
 export default function JobOpportunities({ userId, onApplicationCreated }: JobOpportunitiesProps) {
   const [jobs, setJobs] = useState<JobOpportunity[]>([])
   const [loading, setLoading] = useState(true)
@@ -40,9 +64,12 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   const [minFitScore, setMinFitScore] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set())
   const [applyingJob, setApplyingJob] = useState<string | null>(null)
   const [draftingJob, setDraftingJob] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
+  const [scanResult, setScanResult] = useState<string | null>(null)
 
   // Debounce search input
   useEffect(() => {
@@ -91,6 +118,26 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
     }
   }
 
+  const handleScanNow = async () => {
+    setScanning(true)
+    setScanResult(null)
+    try {
+      const response = await fetch('/api/scan-now', { method: 'POST' })
+      const data = await response.json()
+      if (data.success) {
+        setScanResult(`Found ${data.jobsFound} new job(s)`)
+        await loadJobs()
+      } else {
+        setScanResult(`Scan failed: ${data.error}`)
+      }
+    } catch {
+      setScanResult('Scan failed: network error')
+    } finally {
+      setScanning(false)
+      setTimeout(() => setScanResult(null), 5000)
+    }
+  }
+
   const handleApply = async (job: JobOpportunity) => {
     setApplyingJob(job.id)
     try {
@@ -107,10 +154,8 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
 
       if (data.success) {
         setAppliedJobs(prev => new Set([...prev, job.jobUrl]))
-        // Show success message or notification
         console.log('Application created successfully')
       } else if (response.status === 409) {
-        // Already applied
         setAppliedJobs(prev => new Set([...prev, job.jobUrl]))
       } else {
         console.error('Failed to create application:', data.error)
@@ -125,7 +170,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   }
 
   const handleMoveToDraft = async (job: JobOpportunity) => {
-    if (draftingJob) return // Prevent double-click
+    if (draftingJob) return
     setDraftingJob(job.id)
     try {
       const response = await fetch('/api/applications/create-from-job', {
@@ -141,20 +186,12 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
       const data = await response.json()
 
       if (data.success) {
-        // Archive the job opportunity so it doesn't reappear on refresh
-        await fetch(`/api/opportunities/${job.id}`, {
-          method: 'DELETE'
-        })
-        
-        // Remove job from opportunities list
+        await fetch(`/api/opportunities/${job.id}`, { method: 'DELETE' })
         setJobs(prev => prev.filter(j => j.id !== job.id))
         console.log('Draft application created successfully')
         onApplicationCreated?.()
       } else if (response.status === 409) {
-        // Already exists - archive and remove from list
-        await fetch(`/api/opportunities/${job.id}`, {
-          method: 'DELETE'
-        })
+        await fetch(`/api/opportunities/${job.id}`, { method: 'DELETE' })
         setJobs(prev => prev.filter(j => j.id !== job.id))
         alert('An application already exists for this job')
         onApplicationCreated?.()
@@ -177,7 +214,6 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
       })
 
       if (response.ok) {
-        // Update jobs list without reloading - maintains scroll position
         setJobs(prev => prev.filter(job => job.id !== jobId))
       } else {
         console.error('Failed to delete opportunity')
@@ -189,7 +225,6 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
     }
   }
 
-
   const markAsRead = async (jobId: string) => {
     try {
       await fetch(`/api/opportunities/${jobId}`, {
@@ -197,8 +232,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isRead: true })
       })
-      // Update local state
-      setJobs(prev => prev.map(job => 
+      setJobs(prev => prev.map(job =>
         job.id === jobId ? { ...job, isRead: true } : job
       ))
     } catch (error) {
@@ -216,18 +250,21 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   // Mark jobs as read when they're displayed
   useEffect(() => {
     if (!loading && jobs.length > 0) {
-      // Mark visible unread jobs as read after a short delay
       const timer = setTimeout(() => {
-        const unreadJobs = jobs.filter(job => !job.isRead).slice(0, 5) // Mark first 5
+        const unreadJobs = jobs.filter(job => !job.isRead).slice(0, 5)
         unreadJobs.forEach(job => markAsRead(job.id))
       }, 1000)
       return () => clearTimeout(timer)
     }
   }, [jobs.length, loading])
 
+  // Get unique sources for filter
+  const uniqueSources = Array.from(new Set(jobs.map(j => j.source))).sort()
+
   const filteredJobs = jobs
     .filter(job => filter === 'all' || !job.isRead)
     .filter(job => job.fitScore >= minFitScore)
+    .filter(job => sourceFilter === 'all' || job.source === sourceFilter)
     .filter(job => {
       if (!debouncedSearch) return true
       const searchLower = debouncedSearch.toLowerCase()
@@ -258,7 +295,21 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
               AI-matched opportunities based on your profile
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {scanResult && (
+              <span className="text-sm text-green-600 dark:text-green-400 animate-fade-in">
+                {scanResult}
+              </span>
+            )}
+            <button
+              onClick={handleScanNow}
+              disabled={scanning}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
+              title="Scan all sources for new jobs now"
+            >
+              <ArrowPathIcon className={`h-4 w-4 ${scanning ? 'animate-spin' : ''}`} />
+              {scanning ? 'Scanning...' : 'Scan Now'}
+            </button>
             <button
               onClick={markAllVisibleAsRead}
               className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
@@ -275,7 +326,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
         </div>
 
         {/* Filters */}
-        <div className="flex gap-4 items-center">
+        <div className="flex gap-4 items-center flex-wrap">
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setFilter('all')}
@@ -299,6 +350,22 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
             </button>
           </div>
 
+          {/* Source filter */}
+          {uniqueSources.length > 1 && (
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="px-3 py-1.5 rounded-lg text-sm border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700"
+            >
+              <option value="all">All Sources</option>
+              {uniqueSources.map(source => (
+                <option key={source} value={source}>
+                  {source} ({jobs.filter(j => j.source === source).length})
+                </option>
+              ))}
+            </select>
+          )}
+
           {/* Search Input */}
           <div className="flex-1 max-w-md">
             <input
@@ -306,7 +373,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
               placeholder="Search jobs..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w.full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-1.5 rounded-lg border border-gray-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -340,7 +407,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
             <p className="text-lg font-medium">No job matches found</p>
             <p className="text-sm mt-2">
               {jobs.length === 0
-                ? 'Click "Scan Job Boards" to find opportunities'
+                ? 'Click "Scan Now" to find opportunities'
                 : `Try lowering the minimum fit score (currently ${minFitScore}%)`
               }
             </p>
@@ -373,19 +440,25 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
                           {job.title}
                         </h3>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm">
-                          {job.company} • {job.sourceUrl ? (
-                          <a 
-                            href={job.sourceUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-blue-600 dark:text-blue-400 hover:underline"
-                            title={job.sourceUrl}
-                          >
-                            {job.source} ({extractDomain(job.sourceUrl)})
-                          </a>
-                        ) : job.source}
-                        </p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-gray-600 dark:text-gray-400 text-sm">
+                            {job.company}
+                          </p>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getSourceColor(job.source)}`}>
+                            {job.source}
+                          </span>
+                          {job.sourceUrl && (
+                            <a
+                              href={job.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                              title={job.sourceUrl}
+                            >
+                              {extractDomain(job.sourceUrl)}
+                            </a>
+                          )}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {applied ? (
@@ -408,7 +481,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
                           className="flex-shrink-0 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Move to draft applications"
                         >
-                          {draftingJob === job.id ? '⏳ Saving...' : '📝 Draft'}
+                          {draftingJob === job.id ? 'Saving...' : 'Draft'}
                         </button>
                         <a
                           href={job.jobUrl}
@@ -424,15 +497,15 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
                           className="flex-shrink-0 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
                           title="Delete this opportunity"
                         >
-                          🗑️
+                          X
                         </button>
                       </div>
                     </div>
 
                     {(job.location || job.salary) && (
                       <div className="flex gap-4 text-sm text-gray-500 dark:text-gray-400 mb-3">
-                        {job.location && <span>📍 {job.location}</span>}
-                        {job.salary && <span>💰 {job.salary}</span>}
+                        {job.location && <span>Location: {job.location}</span>}
+                        {job.salary && <span>Salary: {job.salary}</span>}
                       </div>
                     )}
 
@@ -442,7 +515,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
 
                     <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                       <span>Posted: {new Date(job.postedDate).toLocaleDateString()}</span>
-                      <span>•</span>
+                      <span>&bull;</span>
                       <span>Added: {new Date(job.createdAt).toLocaleDateString()}</span>
                       {!job.isRead && (
                         <span className="ml-auto px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 rounded">

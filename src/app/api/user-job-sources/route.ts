@@ -6,17 +6,14 @@ import { auth } from "@/lib/auth"
 export async function GET() {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const sources = await prisma.userJobSource.findMany({
       where: { userId: session.user.id },
-      orderBy: [
-        { isBuiltIn: "desc" },
-        { createdAt: "desc" }
-      ]
+      orderBy: [{ isBuiltIn: "desc" }, { createdAt: "desc" }],
     })
 
     return NextResponse.json({ sources })
@@ -33,13 +30,29 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
-    const { name, description, sourceType, feedUrl, scrapeUrl, enabled } = body
+    const {
+      name,
+      description,
+      sourceType,
+      feedUrl,
+      scrapeUrl,
+      scrapeSelector,
+      titleSelector,
+      companySelector,
+      linkSelector,
+      descriptionSelector,
+      apiEndpoint,
+      apiKey,
+      searchKeywords,
+      excludeKeywords,
+      enabled,
+    } = body
 
     const newSource = await prisma.userJobSource.create({
       data: {
@@ -49,9 +62,18 @@ export async function POST(request: NextRequest) {
         sourceType,
         feedUrl: feedUrl || null,
         scrapeUrl: scrapeUrl || null,
+        scrapeSelector: scrapeSelector || null,
+        titleSelector: titleSelector || null,
+        companySelector: companySelector || null,
+        linkSelector: linkSelector || null,
+        descriptionSelector: descriptionSelector || null,
+        apiEndpoint: apiEndpoint || null,
+        apiKey: apiKey || null,
+        searchKeywords: Array.isArray(searchKeywords) ? searchKeywords : [],
+        excludeKeywords: Array.isArray(excludeKeywords) ? excludeKeywords : [],
         enabled: enabled !== false,
-        isBuiltIn: false
-      }
+        isBuiltIn: false,
+      },
     })
 
     return NextResponse.json({ source: newSource })
@@ -64,30 +86,56 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH - Update job source (enable/disable)
+// PATCH - Update job source
 export async function PATCH(request: NextRequest) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const body = await request.json()
-    const { id, enabled } = body
+    const { id, ...updateFields } = body
 
     // Verify ownership
     const source = await prisma.userJobSource.findUnique({
-      where: { id }
+      where: { id },
     })
 
     if (!source || source.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
+    // Build update data from allowed fields
+    const allowedFields = [
+      "enabled",
+      "name",
+      "description",
+      "feedUrl",
+      "scrapeUrl",
+      "scrapeSelector",
+      "titleSelector",
+      "companySelector",
+      "linkSelector",
+      "descriptionSelector",
+      "apiEndpoint",
+      "apiKey",
+      "searchKeywords",
+      "excludeKeywords",
+    ]
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const updateData: Record<string, any> = {}
+    for (const field of allowedFields) {
+      if (updateFields[field] !== undefined) {
+        updateData[field] = updateFields[field]
+      }
+    }
+
     const updated = await prisma.userJobSource.update({
       where: { id },
-      data: { enabled }
+      data: updateData,
     })
 
     return NextResponse.json({ source: updated })
@@ -104,7 +152,7 @@ export async function PATCH(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
@@ -118,16 +166,15 @@ export async function DELETE(request: NextRequest) {
 
     // Verify ownership
     const source = await prisma.userJobSource.findUnique({
-      where: { id }
+      where: { id },
     })
 
     if (!source || source.userId !== session.user.id) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    // Delete the source (ALL sources are now deletable)
     await prisma.userJobSource.delete({
-      where: { id }
+      where: { id },
     })
 
     return NextResponse.json({ success: true })
@@ -139,4 +186,3 @@ export async function DELETE(request: NextRequest) {
     )
   }
 }
-
