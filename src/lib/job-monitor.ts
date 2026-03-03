@@ -3,7 +3,7 @@
  * Monitors job boards for new opportunities
  */
 
-import { PrismaClient } from '@prisma/client'
+import { prisma } from './prisma'
 import { analyzeJobFitEnhanced } from './ai-service'
 import { calculateRejectionPenalty } from './pattern-learning-service'
 // Hardcoded sources removed - all sources are DB-driven via user_job_sources
@@ -45,8 +45,6 @@ function matchesLocationRequirement(jobLocation: string | undefined): boolean {
   return false
 }
 */
-
-const prisma = new PrismaClient()
 
 interface JobPosting {
   title: string

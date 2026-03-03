@@ -142,6 +142,7 @@ async function fetchFromRSS(
           "application/rss+xml, application/xml, text/xml, application/json, */*",
       },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      redirect: "error", // Prevent SSRF via redirect to internal URLs
     })
 
     if (!response.ok) {
@@ -311,6 +312,7 @@ async function fetchFromAPI(
     const response = await fetch(endpoint, {
       headers,
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      redirect: "error", // Prevent SSRF via redirect to internal URLs
     })
 
     if (!response.ok) {
@@ -364,6 +366,7 @@ async function fetchFromWebScrape(
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      redirect: "error", // Prevent SSRF via redirect to internal URLs
     })
 
     if (!response.ok) {

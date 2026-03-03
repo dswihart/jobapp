@@ -44,13 +44,13 @@ export async function POST() {
       }
     }
 
-    // Set cooldown before starting scan
-    scanCooldowns.set(userId, Date.now())
-
     // Periodic cleanup of old entries
     cleanupOldEntries()
 
     const count = await monitorJobBoards(userId)
+
+    // Set cooldown only after successful scan
+    scanCooldowns.set(userId, Date.now())
 
     return NextResponse.json({
       success: true,
@@ -58,6 +58,8 @@ export async function POST() {
       message: `Scan complete. Found ${count} new job(s).`,
     })
   } catch (error) {
+    // Don't consume cooldown on failure — allow retry
+    scanCooldowns.delete(userId)
     console.error("[Scan Now] Error:", error)
     return NextResponse.json(
       {

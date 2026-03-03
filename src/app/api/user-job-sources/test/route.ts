@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch(url, {
       headers,
       signal: AbortSignal.timeout(10000),
+      redirect: "error", // Prevent SSRF via redirect to internal URLs
     })
 
     if (!response.ok) {

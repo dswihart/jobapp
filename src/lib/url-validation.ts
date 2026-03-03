@@ -90,6 +90,8 @@ function isPrivateIPv4(ip: string): boolean {
   if (a === 169 && b === 254) return true
   // 0.0.0.0
   if (a === 0) return true
+  // 100.64.0.0/10 — CGNAT / cloud internal (RFC 6598)
+  if (a === 100 && b >= 64 && b <= 127) return true
 
   return false
 }
@@ -102,5 +104,32 @@ function isPrivateIPv6(ip: string): boolean {
   if (lower.startsWith("fe80:")) return true
   // fc00::/7 unique local
   if (lower.startsWith("fc") || lower.startsWith("fd")) return true
+  // :: unspecified address
+  if (/^(0:){0,7}0?$/.test(lower) || lower === "::") return true
+
+  // IPv4-mapped IPv6 (::ffff:x.x.x.x or ::ffff:XXYY:ZZWW)
+  const v4 = extractIPv4FromMappedIPv6(lower)
+  if (v4 && isPrivateIPv4(v4)) return true
+
   return false
+}
+
+function extractIPv4FromMappedIPv6(ipv6: string): string | null {
+  // Dotted form: ::ffff:1.2.3.4 or 0:0:0:0:0:ffff:1.2.3.4
+  const dottedMatch = ipv6.match(
+    /^(?:0:)*:?:?ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i
+  )
+  if (dottedMatch) return dottedMatch[1]
+
+  // Hex form: ::ffff:7f00:1 or 0:0:0:0:0:ffff:7f00:1
+  const hexMatch = ipv6.match(
+    /^(?:0:)*:?:?ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i
+  )
+  if (hexMatch) {
+    const hi = parseInt(hexMatch[1], 16)
+    const lo = parseInt(hexMatch[2], 16)
+    return `${(hi >> 8) & 0xff}.${hi & 0xff}.${(lo >> 8) & 0xff}.${lo & 0xff}`
+  }
+
+  return null
 }
