@@ -4,6 +4,15 @@ import { useState, useEffect } from 'react'
 import { ArrowDownTrayIcon, ArrowPathIcon, ChartBarIcon, CalendarDaysIcon, DocumentTextIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 
+interface Application {
+  id: string
+  appliedDate?: string
+}
+
+interface UserData {
+  dailyApplicationGoal?: number
+}
+
 interface StatsData {
   overview: {
     totalApplications: number
@@ -66,6 +75,13 @@ interface StatsData {
   }>
 }
 
+function getDateString(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default function StatsPage() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -73,9 +89,73 @@ export default function StatsPage() {
   const [period, setPeriod] = useState('all')
   const [exporting, setExporting] = useState<string | null>(null)
 
+  // Goal tracker state
+  const [applications, setApplications] = useState<Application[]>([])
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; goalMet: boolean }>>([])
+  const [last30DaysTotal, setLast30DaysTotal] = useState(0)
+  const [todayCount, setTodayCount] = useState(0)
+
   useEffect(() => {
     fetchStats()
   }, [period])
+
+  useEffect(() => {
+    fetchApplications()
+    fetchUser()
+  }, [])
+
+  useEffect(() => {
+    const dailyGoal = userData?.dailyApplicationGoal || 6
+    const todayStr = getDateString(new Date())
+
+    const count = applications.filter(app => {
+      if (!app.appliedDate) return false
+      return getDateString(new Date(app.appliedDate)) === todayStr
+    }).length
+    setTodayCount(count)
+
+    const goalData = []
+    for (let i = 0; i < 30; i++) {
+      const date = new Date()
+      date.setDate(date.getDate() - i)
+      const dateStr = getDateString(date)
+
+      const dayCount = applications.filter(app => {
+        if (!app.appliedDate) return false
+        return getDateString(new Date(app.appliedDate)) === dateStr
+      }).length
+
+      goalData.push({
+        date: date.toISOString(),
+        count: dayCount,
+        goalMet: dayCount >= dailyGoal
+      })
+    }
+
+    setPastDaysGoals(goalData.reverse())
+    setLast30DaysTotal(goalData.reduce((sum, day) => sum + day.count, 0))
+  }, [applications, userData])
+
+  const fetchApplications = async () => {
+    try {
+      const response = await fetch('/api/applications')
+      const data = await response.json()
+      if (Array.isArray(data)) setApplications(data)
+    } catch (error) {
+      console.error('Failed to fetch applications:', error)
+    }
+  }
+
+  const fetchUser = async () => {
+    try {
+      const response = await fetch('/api/user')
+      const data = await response.json()
+      setUserData(data)
+    } catch (error) {
+      console.error('Failed to fetch user:', error)
+    }
+  }
 
   const fetchStats = async () => {
     setLoading(true)
@@ -138,6 +218,8 @@ export default function StatsPage() {
     ARCHIVED: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
   }
 
+  const dailyGoal = userData?.dailyApplicationGoal || 6
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -170,10 +252,10 @@ export default function StatsPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <ChartBarIcon className="h-7 w-7" />
-              Application Statistics
+              Statistics &amp; Goals
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Track your job search progress over time
+              Track your job search progress and daily goals
             </p>
           </div>
           <Link
@@ -182,6 +264,83 @@ export default function StatsPage() {
           >
             &larr; Back to Dashboard
           </Link>
+        </div>
+
+        {/* Daily Goal Tracker */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+          {/* Today's count + 30-day total header */}
+          <div className="grid grid-cols-2 divide-x dark:divide-gray-700">
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Today</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">
+                    {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className={`text-3xl font-bold ${todayCount >= dailyGoal ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                    {todayCount}
+                  </div>
+                  <div className="text-xs text-gray-500">/ {dailyGoal} goal</div>
+                </div>
+              </div>
+            </div>
+            <div className="p-4 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Last 30 Days</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">Total applications</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">{last30DaysTotal}</div>
+                  <div className="text-xs text-gray-500">/ {dailyGoal * 30} goal</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 30-day grid */}
+          <div className="border-t dark:border-gray-700 p-4 sm:p-6">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">
+              Past 30 Days Goal Tracker ({dailyGoal} applications/day)
+            </h3>
+            <div className="grid grid-cols-10 gap-1 max-w-5xl mx-auto">
+              {pastDaysGoals.map((day, index) => {
+                const dateObj = new Date(day.date)
+                const dayNum = dateObj.toLocaleDateString("en-US", { day: "numeric" })
+                const monthShort = dateObj.toLocaleDateString("en-US", { month: "short" })
+                const weekday = dateObj.toLocaleDateString("en-US", { weekday: "short" })
+
+                return (
+                  <div
+                    key={index}
+                    title={`${weekday} ${monthShort} ${dayNum}: ${day.count} applications`}
+                    className={`aspect-square flex flex-col items-center justify-center rounded text-center border ${
+                      day.goalMet
+                        ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600"
+                        : day.count >= 2
+                          ? "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-400 dark:border-yellow-600"
+                          : "bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600"
+                    }`}
+                  >
+                    <div className="text-[7px] text-gray-600 dark:text-gray-400">{weekday}</div>
+                    <div className="text-[7px] text-gray-600 dark:text-gray-400">{monthShort}</div>
+                    <div className="text-[10px] font-bold text-gray-900 dark:text-gray-100">{dayNum}</div>
+                    <div className={`text-[10px] font-bold ${
+                      day.goalMet
+                        ? "text-green-700 dark:text-green-400"
+                        : day.count >= 2
+                          ? "text-yellow-700 dark:text-yellow-400"
+                          : "text-red-700 dark:text-red-400"
+                    }`}>
+                      {day.count}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
 
         {/* Period Filter */}
@@ -338,19 +497,19 @@ export default function StatsPage() {
                 </h2>
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Draft → Submitted</span>
+                    <span className="text-gray-600 dark:text-gray-400">Draft &rarr; Submitted</span>
                     <span className="text-xl font-bold text-gray-900 dark:text-white">
                       {stats.funnel?.conversionRates?.draftToApplied ?? 0}%
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Submitted → Response</span>
+                    <span className="text-gray-600 dark:text-gray-400">Submitted &rarr; Response</span>
                     <span className="text-xl font-bold text-gray-900 dark:text-white">
                       {stats.funnel?.conversionRates?.appliedToResponse ?? 0}%
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Submitted → Interview</span>
+                    <span className="text-gray-600 dark:text-gray-400">Submitted &rarr; Interview</span>
                     <span className="text-xl font-bold text-green-600">
                       {stats.funnel?.conversionRates?.appliedToInterview ?? 0}%
                     </span>
@@ -433,7 +592,7 @@ export default function StatsPage() {
             {stats.dateRange.firstApplication && (
               <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 mb-6 text-sm text-gray-600 dark:text-gray-400">
                 <strong>Date Range:</strong> {stats.dateRange.firstApplication} to {stats.dateRange.lastApplication}
-                {' • '}<strong>Active:</strong> {stats.averages.activeDays} days ({stats.averages.activeWeeks} weeks)
+                {' \u2022 '}<strong>Active:</strong> {stats.averages.activeDays} days ({stats.averages.activeWeeks} weeks)
               </div>
             )}
 
