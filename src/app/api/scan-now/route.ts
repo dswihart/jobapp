@@ -4,6 +4,20 @@ import { monitorJobBoards } from "@/lib/job-monitor"
 
 export const maxDuration = 300
 
+// In-memory rate limiting: userId -> timestamp of last scan
+const scanCooldowns = new Map<string, number>()
+const COOLDOWN_MS = 5 * 60 * 1000 // 5 minutes
+const CLEANUP_THRESHOLD_MS = 60 * 60 * 1000 // 1 hour
+
+function cleanupOldEntries() {
+  const now = Date.now()
+  for (const [key, timestamp] of scanCooldowns) {
+    if (now - timestamp > CLEANUP_THRESHOLD_MS) {
+      scanCooldowns.delete(key)
+    }
+  }
+}
+
 export async function POST() {
   try {
     const session = await auth()
@@ -11,7 +25,32 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const count = await monitorJobBoards(session.user.id)
+    const userId = session.user.id
+
+    // Check rate limit
+    const lastScan = scanCooldowns.get(userId)
+    if (lastScan) {
+      const elapsed = Date.now() - lastScan
+      if (elapsed < COOLDOWN_MS) {
+        const remainingMs = COOLDOWN_MS - elapsed
+        const remainingMin = Math.ceil(remainingMs / 60000)
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Please wait ${remainingMin} minute(s) between scans`,
+          },
+          { status: 429 }
+        )
+      }
+    }
+
+    // Set cooldown before starting scan
+    scanCooldowns.set(userId, Date.now())
+
+    // Periodic cleanup of old entries
+    cleanupOldEntries()
+
+    const count = await monitorJobBoards(userId)
 
     return NextResponse.json({
       success: true,

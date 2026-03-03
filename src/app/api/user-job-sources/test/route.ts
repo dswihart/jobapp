@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { isAllowedUrl } from "@/lib/url-validation"
 
 const USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -33,6 +34,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: false,
         error: "No URL configured",
+      })
+    }
+
+    // SSRF protection: validate URL before fetching
+    const urlCheck = isAllowedUrl(url)
+    if (!urlCheck.allowed) {
+      return NextResponse.json({
+        success: false,
+        error: `URL blocked: ${urlCheck.reason}`,
       })
     }
 

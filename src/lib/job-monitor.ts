@@ -18,29 +18,29 @@ import { extractSkillsFromJob, saveSkillsToDatabase } from './skill-service'
 /*
 function matchesLocationRequirement(jobLocation: string | undefined): boolean {
   if (!jobLocation) return false
-  
+
   const loc = jobLocation.toLowerCase()
-  
+
   // Accept remote jobs
   if (loc.includes('remote') || loc.includes('worldwide') || loc.includes('anywhere')) {
     return true
   }
-  
+
   // Accept Barcelona jobs
   if (loc.includes('barcelona')) {
     return true
   }
-  
+
   // Accept Spain jobs (could be remote from Spain)
   if (loc.includes('spain') || loc.includes('españa') || loc.includes('madrid') || loc.includes('valencia')) {
     return true
   }
-  
+
   // Accept European remote
   if (loc.includes('europe') && loc.includes('remote')) {
     return true
   }
-  
+
   // Reject everything else (USA, Egypt, India, etc.)
   return false
 }
@@ -101,7 +101,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
   console.log(`[Job Monitor] Settings: Min Fit Score = ${minFitScore}%, Max Age = ${maxJobAgeDays} days`)
 
   // Fetch from all enabled sources
-  const allJobs: JobPosting[] = await fetchFromAllSources(userId, user.primarySkills || user.skills)
+  const allJobs: JobPosting[] = await fetchFromAllSources(userId)
   console.log(`[Job Monitor] Found ${allJobs.length} total jobs from all sources`)
 
   let addedCount = 0
@@ -114,7 +114,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
         WHERE "userId" = ${userId} AND "jobUrl" = ${job.jobUrl}
         LIMIT 1
       `
-      
+
       if (blocked.length > 0) {
         console.log(`[Job Monitor] Skipping blocked job: ${job.title}`)
         continue
@@ -233,12 +233,12 @@ export async function monitorJobBoards(userId: string): Promise<number> {
   console.log(`[Job Monitor] Scan complete. Added ${addedCount} new jobs.`)
   return addedCount
 }
-async function fetchFromAllSources(userId: string, skills: string[]): Promise<JobPosting[]> {
+async function fetchFromAllSources(userId: string): Promise<JobPosting[]> {
   const allJobs: JobPosting[] = []
 
   // Fetch from user-configured DB sources (the only source system now)
   try {
-    const userJobs = await fetchFromUserSources(userId, skills)
+    const userJobs = await fetchFromUserSources(userId)
     console.log('[Job Aggregator] Found ' + userJobs.length + ' jobs from user sources')
     allJobs.push(...userJobs)
   } catch (error) {
@@ -281,15 +281,15 @@ export async function markAlertAsRead(alertId: string) {
 
 export async function getJobOpportunities(userId: string) {
   console.log('[DEBUG getJobOpportunities] Called with userId:', userId)
-  
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { preferredCountries: true }
   })
   const preferredCountries = user?.preferredCountries || []
-  
+
   console.log('[DEBUG getJobOpportunities] Preferred countries:', preferredCountries)
-  
+
   const allJobs = await prisma.jobOpportunity.findMany({
     where: {
       userId,
@@ -299,38 +299,38 @@ export async function getJobOpportunities(userId: string) {
       createdAt: 'desc'
     }
   })
-  
+
   console.log('[DEBUG getJobOpportunities] Found', allJobs.length, 'unarchived jobs')
-  
+
   if (preferredCountries.length === 0) {
     console.log('[DEBUG] No preferred countries - returning all jobs')
     return allJobs
   }
-  
+
   const filteredJobs = allJobs.filter(job => {
     const location = (job.location || '').toLowerCase()
     const title = (job.title || '').toLowerCase()
     const description = (job.description || '').toLowerCase()
-    
+
     if (!job.location || job.location.trim() === '') {
       console.log('[DEBUG] Including (no location):', job.title)
       return true
     }
-    
+
     if (location.includes('remote') || location.includes('worldwide') ||
         location.includes('anywhere') || location.includes('global') ||
         title.includes('remote') || description.includes('remote')) {
       console.log('[DEBUG] Including (remote):', job.title)
       return true
     }
-    
+
     const matches = preferredCountries.some(country => {
       const countryLower = country.toLowerCase()
-      
+
       if (location.includes(countryLower)) {
         return true
       }
-      
+
       const locationVariations: Record<string, string[]> = {
         'spain': ['spain', 'españa', 'spanish', 'barcelona', 'madrid', 'valencia', 'seville'],
         'barcelona': ['barcelona', 'spain', 'españa'],
@@ -343,25 +343,25 @@ export async function getJobOpportunities(userId: string) {
         'netherlands': ['netherlands', 'dutch', 'amsterdam', 'rotterdam'],
         'portugal': ['portugal', 'portuguese', 'lisbon', 'porto']
       }
-      
+
       const variations = locationVariations[countryLower]
       if (variations) {
         return variations.some(variant => location.includes(variant))
       }
-      
+
       return false
     })
-    
+
     if (matches) {
       console.log('[DEBUG] Including (match):', job.title, '-', job.location)
     } else {
       console.log('[DEBUG] Filtering out:', job.title, '-', job.location)
     }
-    
+
     return matches
   })
-  
+
   console.log('[DEBUG getJobOpportunities] Returning', filteredJobs.length, 'jobs')
-  
+
   return filteredJobs
 }

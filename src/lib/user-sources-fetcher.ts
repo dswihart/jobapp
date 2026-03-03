@@ -3,13 +3,14 @@
  * Fetches jobs from user-configured sources
  */
 
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "./prisma"
+import { isAllowedUrl } from "./url-validation"
 import * as cheerio from "cheerio"
-
-const prisma = new PrismaClient()
 
 const USER_AGENT =
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+const FETCH_TIMEOUT_MS = 15000
 
 interface JobPosting {
   title: string
@@ -28,8 +29,7 @@ interface JobPosting {
  * NOTE: No pre-AI skill filter - AI fit-score handles all quality filtering
  */
 export async function fetchFromUserSources(
-  userId: string,
-  skills: string[]
+  userId: string
 ): Promise<JobPosting[]> {
   try {
     const sources = await prisma.userJobSource.findMany({
@@ -46,6 +46,16 @@ export async function fetchFromUserSources(
     for (const source of sources) {
       try {
         console.log(`[${source.name}] Fetching jobs...`)
+
+        // URL validation (defense-in-depth)
+        const sourceUrl = source.feedUrl || source.apiEndpoint || source.scrapeUrl
+        if (sourceUrl) {
+          const urlCheck = isAllowedUrl(sourceUrl)
+          if (!urlCheck.allowed) {
+            console.log(`[${source.name}] URL blocked: ${urlCheck.reason} — skipping`)
+            continue
+          }
+        }
 
         let jobs: JobPosting[] = []
 
@@ -131,6 +141,7 @@ async function fetchFromRSS(
         Accept:
           "application/rss+xml, application/xml, text/xml, application/json, */*",
       },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
 
     if (!response.ok) {
@@ -297,7 +308,10 @@ async function fetchFromAPI(
       headers["Authorization"] = `Bearer ${apiKey}`
     }
 
-    const response = await fetch(endpoint, { headers })
+    const response = await fetch(endpoint, {
+      headers,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
@@ -349,6 +363,7 @@ async function fetchFromWebScrape(
         "User-Agent": USER_AGENT,
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
 
     if (!response.ok) {
