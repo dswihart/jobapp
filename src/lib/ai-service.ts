@@ -160,36 +160,40 @@ export async function analyzeJobFitEnhanced(
 `
     }
 
-    const prompt = `You are a strict job matching AI. Score how well this candidate matches the job posting. Be ACCURATE, not encouraging.
+    const prompt = `You are a job matching AI for a cybersecurity professional. Score how well this candidate matches the job posting.
 
-**CANDIDATE'S CORE IDENTITY: CYBERSECURITY & INFORMATION SECURITY**
-This candidate is a cybersecurity professional. Their DevOps/cloud skills (Terraform, Kubernetes, Docker) are TOOLS they use in security contexts, NOT their career focus. Do NOT match them with pure DevOps, pure development, or pure infrastructure roles.
+**STEP 1: Determine if this is a security-related role.**
+Check the job title AND description for security indicators:
+- Title contains: security, cybersecurity, infosec, CISO, SOC, SIEM, DLP, IAM, PAM, compliance, GRC, threat, vulnerability, penetration, forensic, encryption, DevSecOps, SRE, cloud security, data protection, risk, audit
+- Description mentions: security responsibilities, compliance frameworks, threat detection, incident response, access control, vulnerability management, security architecture, security tools
 
-**HARD DISQUALIFICATION RULES (override everything else):**
-1. **ROLE DOMAIN CHECK** - The job MUST have a security/compliance/SRE component:
-   - Pure DevOps (no security mentioned) → titleMatch ≤20, overall ≤30
-   - Pure Software Engineering/Backend/Frontend → titleMatch ≤15, overall ≤25
-   - Pure Data Engineering/ML/AI → titleMatch ≤15, overall ≤25
-   - IT Support/Helpdesk/IT Operations → titleMatch ≤15, overall ≤25
-   - Sales/Marketing/HR/Legal/Product → titleMatch ≤10, overall ≤15
-   - ONLY these domains qualify for high scores: cybersecurity, information security, cloud security, DevSecOps, SRE, GRC/compliance, DLP, IAM/PAM, SOC, incident response, security architecture, CISO
-2. **LOCATION CHECK**:
-   - Candidate requires: Remote or Barcelona/Spain/Europe
-   - USA-only, Asia-only, etc. → locationMatch=0, overall ≤30
-3. **"DevOps" IS NOT "Security"** - A job titled "DevOps Engineer" that only mentions CI/CD, deployments, and infrastructure with NO security responsibilities is NOT a match. The job must explicitly involve security tasks (threat detection, vulnerability management, compliance, access control, incident response, etc.)
+**STEP 2: Score based on role domain.**
+
+IF the role IS security-related → Score normally using skills/experience/seniority match. These roles should score 55-95% if skills align.
+
+IF the role is NOT security-related → Apply penalties:
+- Pure DevOps (only CI/CD, deployments, no security) → overall ≤35
+- Pure Software Engineering/Backend/Frontend → overall ≤25
+- Pure Data/ML/AI Engineering → overall ≤25
+- Sales/Marketing/HR/Legal/Product/Support → overall ≤15
+- Generic IT Operations/Helpdesk → overall ≤25
+
+**STEP 3: Location check.**
+- Candidate needs: Remote, Barcelona, Spain, or Europe
+- USA-only/Asia-only with no remote option → locationMatch=0, cap overall at 30
 
 **Candidate Profile:**
-- Primary Skills (Core Expertise): ${userProfile.primarySkills.join(', ')}
+- Primary Skills: ${userProfile.primarySkills.join(', ')}
 - Secondary Skills: ${userProfile.secondarySkills.join(', ')}
-- Learning/Familiar: ${userProfile.learningSkills?.join(', ') || 'None'}
+- Learning: ${userProfile.learningSkills?.join(', ') || 'None'}
 - Years of Experience: ${userProfile.yearsOfExperience || 'Unknown'}
-- Seniority Level: ${userProfile.seniorityLevel || 'Unknown'}
+- Seniority: ${userProfile.seniorityLevel || 'Unknown'}
 - Recent Roles: ${userProfile.workHistory?.slice(0, 3).map(w => w.role).join(', ') || 'Not provided'}
-- **Preferred Job Titles**: ${userProfile.jobTitles?.join(', ') || 'Any'}
-- Target Industries: ${userProfile.industries?.join(', ') || 'Any'}
-- **Work Preference**: ${userProfile.workPreference || 'Not specified'}
-- **Preferred Locations**: ${userProfile.preferredCountries?.join(", ") || "Any"}
-- Professional Summary: ${userProfile.summary || 'Not provided'}
+- Preferred Titles: ${userProfile.jobTitles?.join(', ') || 'Any'}
+- Industries: ${userProfile.industries?.join(', ') || 'Any'}
+- Work Preference: ${userProfile.workPreference || 'Not specified'}
+- Preferred Locations: ${userProfile.preferredCountries?.join(", ") || "Any"}
+- Summary: ${userProfile.summary || 'Not provided'}
 ${skillDemandSection}
 **Job Posting:**
 Title: ${jobDescription.title}
@@ -202,8 +206,7 @@ ${jobDescription.description}
 
 ${jobDescription.requirements ? `Requirements:\n${jobDescription.requirements}` : ''}
 
-**Analysis Task:**
-Return a JSON object with this exact structure:
+Return a JSON object:
 {
   "overall": 0-100,
   "skillMatch": 0-100,
@@ -212,54 +215,32 @@ Return a JSON object with this exact structure:
   "titleMatch": 0-100,
   "industryMatch": 0-100,
   "locationMatch": 0-100,
-  "reasoning": "2-3 sentences explaining the match quality",
-  "matchedSkills": ["matching skills"],
-  "missingSkills": ["required skills they lack"],
-  "recommendations": ["advice for applying"],
-  "strengths": ["key advantages"],
-  "concerns": ["gaps to address"],
-  "highDemandMatches": ["high-demand matching skills"],
-  "trendingSkillsNeeded": ["trending skills to learn"]
+  "reasoning": "2-3 sentences",
+  "matchedSkills": ["skills that match"],
+  "missingSkills": ["skills they lack"],
+  "recommendations": ["advice"],
+  "strengths": ["advantages"],
+  "concerns": ["gaps"],
+  "highDemandMatches": ["high-demand skills"],
+  "trendingSkillsNeeded": ["skills to learn"]
 }
 
-**Cybersecurity Domain Knowledge:**
-- SIEM: Splunk, ELK/Elastic, Sentinel, QRadar, Datadog Security
-- EDR/XDR: CrowdStrike Falcon, SentinelOne, Carbon Black, Defender for Endpoint, Cortex XDR
-- IAM/PAM: CyberArk, Okta, Entra ID, SailPoint, BeyondTrust
-- DLP: Microsoft Purview, Symantec DLP, Digital Guardian, Forcepoint
-- Cloud security: AWS Security Hub, Azure Security Center, GCP SCC, Prisma Cloud, Wiz, Orca
-- Vuln mgmt: Qualys, Nessus/Tenable, Rapid7, Snyk, Trivy
-- Network security: Palo Alto, Fortinet, Check Point, WAF (Imperva, Cloudflare)
-- GRC: GDPR, PCI-DSS, HIPAA, SOX, ISO 27001, NIST, SOC2
-- These tools ARE interchangeable within their category
+**Cybersecurity tool equivalences (treat as interchangeable):**
+- SIEM: Splunk ↔ ELK ↔ Sentinel ↔ QRadar ↔ Datadog Security
+- EDR/XDR: CrowdStrike ↔ SentinelOne ↔ Carbon Black ↔ Defender ↔ Cortex XDR
+- IAM/PAM: CyberArk ↔ Okta ↔ Entra ID ↔ SailPoint ↔ BeyondTrust
+- DLP: Purview ↔ Symantec DLP ↔ Digital Guardian ↔ Forcepoint
+- Cloud security: AWS Security Hub ↔ Azure Security Center ↔ Prisma Cloud ↔ Wiz
+- Vuln mgmt: Qualys ↔ Nessus ↔ Rapid7 ↔ Snyk ↔ Trivy
+- Network: Palo Alto ↔ Fortinet ↔ Check Point ↔ WAF (Imperva/Cloudflare)
+- GRC frameworks: GDPR ↔ PCI-DSS ↔ HIPAA ↔ SOX ↔ ISO 27001 ↔ NIST ↔ SOC2
 
-**GOOD matches (security-focused roles):**
-- Cloud Security Engineer, Security Architect, CISO, InfoSec Engineer
-- DevSecOps Engineer, Security Operations, SOC Engineer
-- DLP Engineer, IAM/PAM Engineer, GRC Analyst
-- SRE with security responsibilities, Compliance Engineer
-- Penetration Tester, Vulnerability Manager, Threat Analyst
+**Scoring formula:**
+- titleMatch 25% + skillMatch 35% + experienceMatch 15% + seniorityMatch 10% + locationMatch 10% + industryMatch 5%
 
-**BAD matches (no security component):**
-- DevOps Engineer (pure CI/CD), Backend Developer, Frontend Developer
-- Data Engineer, ML Engineer, AI Developer, Software Architect
-- IT Support, IT Operations (generic), Systems Administrator (generic)
-- Product Manager, Scrum Master, QA Engineer
+**IMPORTANT: If the job title clearly indicates a security role (e.g., "Security Engineer", "CyberArk Engineer", "SOC Analyst", "CISO", "DLP Engineer", "Threat Analyst"), give titleMatch 70-100 based on how closely it aligns with candidate's preferred titles. Do NOT score security roles low just because the description is brief.**
 
-**Scoring Formula:**
-- Role Alignment: 40% (titleMatch 30% + seniorityMatch 10%)
-- Skills: 35% (skillMatch)
-- Experience: 10% (experienceMatch)
-- Context: 15% (locationMatch 10% + industryMatch 5%)
-
-**Scoring Calibration:**
-- 80-100: Perfect match - security role, right seniority, matching skills, good location
-- 60-79: Strong match - security-adjacent role with clear security component
-- 40-59: Possible match - some security overlap but not primary focus
-- 20-39: Weak match - different domain, some transferable skills
-- 0-19: No match - completely different field
-
-Return ONLY valid JSON, no markdown or extra text`
+Return ONLY valid JSON, no markdown.`
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',
