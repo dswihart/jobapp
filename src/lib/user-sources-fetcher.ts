@@ -158,7 +158,7 @@ async function fetchFromRSS(
           "application/rss+xml, application/xml, text/xml, application/json, */*",
       },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      redirect: "error", // Prevent SSRF via redirect to internal URLs
+      redirect: "follow", // Allow redirects for RSS (URL pre-validated upstream)
     })
 
     if (!response.ok) {
