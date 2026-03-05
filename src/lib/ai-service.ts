@@ -172,11 +172,14 @@ Check the job title AND description for security indicators:
 IF the role IS security-related → Score normally using skills/experience/seniority match. These roles should score 55-95% if skills align.
 
 IF the role is NOT security-related → Apply penalties:
+- Pure Cloud/Infrastructure (Cloud Architect, Azure/AWS Consultant, Solutions Architect with no security focus) → overall ≤35
 - Pure DevOps (only CI/CD, deployments, no security) → overall ≤35
 - Pure Software Engineering/Backend/Frontend → overall ≤25
 - Pure Data/ML/AI Engineering → overall ≤25
 - Sales/Marketing/HR/Legal/Product/Support → overall ≤15
 - Generic IT Operations/Helpdesk → overall ≤25
+
+IMPORTANT: Only score cloud roles high (55+) if they explicitly involve cloud SECURITY (e.g., Cloud Security Engineer, Cloud Security Architect). Generic cloud roles (Cloud Architect, Azure Consultant, Solutions Architect) that focus on infrastructure/migration/design without security responsibilities should be capped at 35.
 
 **STEP 3: Location check.**
 - Candidate needs: Remote, Barcelona, Spain, or Europe
