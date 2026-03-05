@@ -140,10 +140,16 @@ export async function monitorJobBoards(userId: string): Promise<number> {
 
       // Check job age
       if (job.postedDate) {
-        const jobAgeInDays = Math.floor((Date.now() - new Date(job.postedDate).getTime()) / (1000 * 60 * 60 * 24))
-        if (jobAgeInDays > maxJobAgeDays) {
-          console.log(`[Job Monitor] Skipping old job: ${job.title} (posted ${jobAgeInDays} days ago, max: ${maxJobAgeDays} days)`)
-          continue
+        const postedTime = new Date(job.postedDate).getTime()
+        // Guard: if date is epoch (year < 2000) or NaN, skip the age check — treat as fresh
+        if (!isNaN(postedTime) && new Date(postedTime).getFullYear() >= 2000) {
+          const jobAgeInDays = Math.floor((Date.now() - postedTime) / (1000 * 60 * 60 * 24))
+          if (jobAgeInDays > maxJobAgeDays) {
+            console.log(`[Job Monitor] Skipping old job: ${job.title} (posted ${jobAgeInDays} days ago, max: ${maxJobAgeDays} days)`)
+            continue
+          }
+        } else {
+          console.log(`[Job Monitor] Skipping age check for ${job.title} — invalid postedDate`)
         }
       }
 

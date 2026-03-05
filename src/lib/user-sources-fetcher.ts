@@ -12,6 +12,22 @@ const USER_AGENT =
 
 const FETCH_TIMEOUT_MS = 15000
 
+/**
+ * Safely parse a date string. Returns current date if parsing fails or produces epoch.
+ */
+function safeParseDate(raw: string | undefined | null, sourceName: string): Date {
+  if (!raw || raw.trim() === "") {
+    return new Date()
+  }
+  const parsed = new Date(raw)
+  if (isNaN(parsed.getTime()) || parsed.getFullYear() < 2000) {
+    console.log(`[SafeDate] Invalid date from ${sourceName}: "${raw}" — treating as fresh`)
+    return new Date()
+  }
+  return parsed
+}
+
+
 interface JobPosting {
   title: string
   company: string
@@ -206,9 +222,7 @@ function parseJSONFeed(data: any, sourceName: string): JobPosting[] {
       requirements: description.substring(0, 500),
       location: item.location || undefined,
       jobUrl: item.url || "",
-      postedDate: item.date_published
-        ? new Date(item.date_published)
-        : new Date(),
+      postedDate: safeParseDate(item.date_published, sourceName),
       source: sourceName,
     }
   })
@@ -248,7 +262,7 @@ function parseXMLFeed(xmlText: string, sourceName: string): JobPosting[] {
         requirements: decodeHtml(description).substring(0, 500),
         location: location ? decodeHtml(location).trim() : undefined,
         jobUrl: link.trim(),
-        postedDate: pubDate ? new Date(pubDate) : new Date(),
+        postedDate: safeParseDate(pubDate, sourceName),
         source: sourceName,
       })
     }
@@ -339,9 +353,7 @@ async function fetchFromAPI(
         undefined,
       salary: job.salary || undefined,
       jobUrl: job.url || job.link || "",
-      postedDate: job.posted_date || job.publication_date || job.created_at
-        ? new Date(job.posted_date || job.publication_date || job.created_at)
-        : new Date(),
+      postedDate: safeParseDate(job.posted_date || job.publication_date || job.created_at, sourceName),
       source: sourceName,
     }))
   } catch (error) {
