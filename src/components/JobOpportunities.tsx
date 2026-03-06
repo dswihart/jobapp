@@ -7,6 +7,8 @@ import {
   FunnelIcon,
   CheckCircleIcon,
   ArrowPathIcon,
+  HandThumbUpIcon,
+  HandThumbDownIcon,
 } from '@heroicons/react/24/outline'
 
 interface JobOpportunity {
@@ -23,6 +25,7 @@ interface JobOpportunity {
   postedDate: string
   isRead: boolean
   createdAt: string
+  userFeedback?: string
 }
 
 interface JobOpportunitiesProps {
@@ -70,6 +73,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   const [draftingJob, setDraftingJob] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [scanResult, setScanResult] = useState<string | null>(null)
+  const [feedbackLoading, setFeedbackLoading] = useState<string | null>(null)
 
   // Debounce search input
   useEffect(() => {
@@ -84,6 +88,32 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
     loadAppliedJobs()
   }, [userId])
 
+const handleFeedback = async (jobId: string, feedback: 'GOOD_MATCH' | 'BAD_MATCH') => {
+    if (feedback === 'BAD_MATCH' && !window.confirm('Remove this job and block it from appearing again?')) {
+      return
+    }
+    setFeedbackLoading(jobId)
+    try {
+      const response = await fetch('/api/opportunities/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ opportunityId: jobId, userId, feedback })
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.deleted) {
+          setJobs(prev => prev.filter(j => j.id !== jobId))
+        } else {
+          setJobs(prev => prev.map(j => j.id === jobId ? { ...j, userFeedback: feedback } : j))
+        }
+      }
+    } catch (error) {
+      console.error('Error saving feedback:', error)
+      alert('Failed to save feedback. Please try again.')
+    } finally {
+      setFeedbackLoading(null)
+    }
+  }
   const loadJobs = async () => {
     if (!userId) return
 
@@ -493,11 +523,20 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
                           <ArrowTopRightOnSquareIcon className="h-4 w-4" />
                         </a>
                         <button
-                          onClick={() => handleDelete(job.id)}
-                          className="flex-shrink-0 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-                          title="Delete this opportunity"
+                          onClick={() => handleFeedback(job.id, 'GOOD_MATCH')}
+                          disabled={feedbackLoading === job.id}
+                          className={"flex-shrink-0 px-3 py-2 rounded-lg transition-colors text-sm flex items-center gap-1 disabled:opacity-50 " + (job.userFeedback === 'GOOD_MATCH' ? 'bg-green-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30')}
+                          title="Good match"
                         >
-                          X
+                          <HandThumbUpIcon className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleFeedback(job.id, 'BAD_MATCH')}
+                          disabled={feedbackLoading === job.id}
+                          className="flex-shrink-0 px-3 py-2 bg-gray-100 dark:bg-gray-700 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-sm flex items-center gap-1 disabled:opacity-50"
+                          title="Not a match - removes and blocks"
+                        >
+                          <HandThumbDownIcon className="h-4 w-4" />
                         </button>
                       </div>
                     </div>

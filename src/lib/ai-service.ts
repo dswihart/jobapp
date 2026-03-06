@@ -123,11 +123,30 @@ async function getSkillDemandContext(userSkills: string[]): Promise<{
 }
 
 /**
+ * Get recent GOOD_MATCH jobs to feed into AI prompt as calibration
+ */
+async function getRecentLikedJobs(userId: string): Promise<Array<{ title: string; company: string; fitScore: number }>> {
+  try {
+    const result = await prisma.jobOpportunity.findMany({
+      where: { userId, userFeedback: 'GOOD_MATCH' },
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+      select: { title: true, company: true, fitScore: true }
+    })
+    return result.map(r => ({ title: r.title, company: r.company, fitScore: r.fitScore || 0 }))
+  } catch (error) {
+    console.error('Error fetching liked jobs:', error)
+    return []
+  }
+}
+
+/**
  * Enhanced AI matching using Claude with skill database integration
  */
 export async function analyzeJobFitEnhanced(
   userProfile: EnhancedUserProfile,
-  jobDescription: JobDescription
+  jobDescription: JobDescription,
+  userId?: string
 ): Promise<EnhancedFitScore> {
   const apiKey = process.env.ANTHROPIC_API_KEY
 
@@ -158,6 +177,16 @@ export async function analyzeJobFitEnhanced(
 - Candidate's Rising Skills: ${rising.map(s => s.name).join(', ') || 'None'}
 - Top In-Demand Skills in Market: ${skillContext.topDemandSkills.slice(0, 10).map(s => s.name).join(', ')}
 `
+    }
+
+    // Fetch user preference history if userId provided
+    let preferenceSection = ''
+    if (userId) {
+      const likedJobs = await getRecentLikedJobs(userId)
+      if (likedJobs.length > 0) {
+        const likedLines = likedJobs.map(j => `- ${j.title} at ${j.company} (scored ${j.fitScore}%)`).join("\n")
+        preferenceSection = "\n**User Preference History (jobs the user liked):**\n" + likedLines + "\nUse these as calibration - the user has confirmed these are good matches. Score similar roles and companies higher.\n"
+      }
     }
 
     const prompt = `You are a job matching AI for a cybersecurity professional. Score how well this candidate matches the job posting.
@@ -197,7 +226,7 @@ IMPORTANT: Only score cloud roles high (55+) if they explicitly involve cloud SE
 - Work Preference: ${userProfile.workPreference || 'Not specified'}
 - Preferred Locations: ${userProfile.preferredCountries?.join(", ") || "Any"}
 - Summary: ${userProfile.summary || 'Not provided'}
-${skillDemandSection}
+${skillDemandSection}${preferenceSection}
 **Job Posting:**
 Title: ${jobDescription.title}
 Company: ${jobDescription.company}

@@ -3,9 +3,8 @@
  * Analyzes rejected jobs to learn user preferences
  */
 
-import { PrismaClient } from '@prisma/client'
+import { prisma } from './prisma'
 
-const prisma = new PrismaClient()
 
 interface JobOpportunity {
   id: string
@@ -42,17 +41,9 @@ export async function learnFromRejection(
   // 2. Company pattern
   patterns.push({ type: 'REJECTED_COMPANY', value: job.company })
 
-  // 3. Source pattern (if user consistently rejects from a source)
-  patterns.push({ type: 'REJECTED_SOURCE', value: job.source })
-
-  // 4. Location pattern
+  // 3. Location pattern
   if (job.location) {
     patterns.push({ type: 'REJECTED_LOCATION', value: job.location })
-  }
-
-  // 5. Low fit score pattern (if rejecting jobs above certain score)
-  if (job.fitScore < 50) {
-    patterns.push({ type: 'REJECTED_LOW_SCORE', value: `${Math.floor(job.fitScore / 10) * 10}` })
   }
 
   // Store patterns in database
@@ -149,14 +140,8 @@ export async function calculateRejectionPenalty(
         break
 
       case 'REJECTED_COMPANY':
-        if (job.company === pattern.patternValue) {
+        if (job.company.toLowerCase() === pattern.patternValue.toLowerCase()) {
           penaltyScore += 20 * weight
-        }
-        break
-
-      case 'REJECTED_SOURCE':
-        if (job.source === pattern.patternValue) {
-          penaltyScore += 10 * weight
         }
         break
 

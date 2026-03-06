@@ -1,15 +1,22 @@
 export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 import { learnFromRejection } from '@/lib/pattern-learning-service'
 
-const prisma = new PrismaClient()
 
 export async function POST(request: Request) {
   try {
-    const { opportunityId, userId, feedback } = await request.json()
+    const session = await auth()
 
-    if (!opportunityId || !userId || !feedback) {
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userId = session.user.id
+    const { opportunityId, feedback } = await request.json()
+
+    if (!opportunityId || !feedback) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 

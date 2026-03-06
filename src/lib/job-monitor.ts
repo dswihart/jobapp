@@ -184,13 +184,21 @@ export async function monitorJobBoards(userId: string): Promise<number> {
           requirements: job.requirements || '',
           location: job.location,
           salary: job.salary
-        }
+        },
+        userId
       )
 
 
       // Apply learned rejection patterns penalty
-      // DISABLED temporarily until rejection_patterns table is created
-      const rejectionPenalty = 0
+      const rejectionPenalty = await calculateRejectionPenalty(userId, {
+        id: 'pending',
+        title: job.title,
+        company: job.company,
+        description: job.description,
+        location: job.location,
+        source: job.source || 'Unknown',
+        fitScore: fitScore.overall
+      })
 
       const adjustedScore = Math.max(0, fitScore.overall - rejectionPenalty)
 
@@ -215,7 +223,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
 
         await prisma.alert.create({
           data: {
-            message: `New job match: ${job.title} at ${job.company} (${fitScore.overall}% fit)`,
+            message: `New job match: ${job.title} at ${job.company} (${adjustedScore}% fit)`,
             type: 'NEW_JOB',
             userId,
             opportunityId: opportunity.id
@@ -226,7 +234,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
         extractSkillsFromJob(job.description, job.title, job.company, job.requirements)
           .then(result => saveSkillsToDatabase(result, job.jobUrl))
           .catch(err => console.error("[Job Monitor] Skill extraction error:", err))
-        console.log(`[Job Monitor] Added job: ${job.title} (${fitScore.overall}% fit)`)
+        console.log(`[Job Monitor] Added job: ${job.title} (${adjustedScore}% fit)`)
         addedCount++
       }
     } catch (error) {
