@@ -88,7 +88,7 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
     loadAppliedJobs()
   }, [userId])
 
-const handleFeedback = async (jobId: string, feedback: 'GOOD_MATCH' | 'BAD_MATCH') => {
+  const handleFeedback = async (jobId: string, feedback: 'GOOD_MATCH' | 'BAD_MATCH') => {
     if (feedback === 'BAD_MATCH' && !window.confirm('Remove this job and block it from appearing again?')) {
       return
     }
@@ -97,7 +97,7 @@ const handleFeedback = async (jobId: string, feedback: 'GOOD_MATCH' | 'BAD_MATCH
       const response = await fetch('/api/opportunities/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ opportunityId: jobId, userId, feedback })
+        body: JSON.stringify({ opportunityId: jobId, feedback })
       })
       if (response.ok) {
         const data = await response.json()
@@ -114,6 +114,7 @@ const handleFeedback = async (jobId: string, feedback: 'GOOD_MATCH' | 'BAD_MATCH
       setFeedbackLoading(null)
     }
   }
+
   const loadJobs = async () => {
     if (!userId) return
 
