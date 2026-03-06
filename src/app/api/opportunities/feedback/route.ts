@@ -46,12 +46,20 @@ export async function POST(request: Request) {
         fitScore: job.fitScore || 0
       })
 
-      // Add to permanent block list to prevent re-scraping
-      await prisma.$executeRaw`
-        INSERT INTO blocked_jobs (user_id, job_url)
-        VALUES (${userId}, ${job.jobUrl})
-        ON CONFLICT (user_id, job_url) DO NOTHING
-      `
+      // Add to permanent block list to prevent re-scraping (use Prisma model)
+      try {
+        await prisma.blockedJob.create({
+          data: {
+            userId,
+            jobUrl: job.jobUrl
+          }
+        })
+      } catch (e: unknown) {
+        // Ignore unique constraint violation (already blocked)
+        if (!(e instanceof Error && 'code' in e && (e as { code: string }).code === 'P2002')) {
+          throw e
+        }
+      }
 
       // Delete the opportunity
       await prisma.jobOpportunity.delete({
@@ -59,7 +67,7 @@ export async function POST(request: Request) {
       })
 
       console.log(`[Pattern Learning] Learned from rejection and blocked: ${job.title} at ${job.company}`)
-      
+
       return NextResponse.json({ success: true, deleted: true })
     }
 

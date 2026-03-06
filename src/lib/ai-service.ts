@@ -4,6 +4,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import * as cheerio from 'cheerio'
 import { prisma } from './prisma'
 
 // Export basic interfaces for backward compatibility
@@ -453,5 +454,95 @@ export async function analyzeJobFit(
     matchedSkills: result.matchedSkills,
     missingSkills: result.missingSkills,
     recommendations: result.recommendations
+  }
+}
+
+/**
+ * Extract job details from HTML page using Claude AI
+ */
+export async function extractJobFromHtml(
+  html: string,
+  url: string
+): Promise<{ title: string; company: string; description: string; requirements?: string; location?: string; salary?: string } | { error: string }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return { error: 'AI service unavailable' }
+  }
+
+  try {
+    const $ = cheerio.load(html)
+    // Remove script, style, nav, footer, header elements to reduce noise
+    $('script, style, nav, footer, header, noscript, iframe').remove()
+    let text = $('body').text().replace(/\s+/g, ' ').trim()
+
+    // Truncate to 10k chars to limit token usage
+    if (text.length > 10000) {
+      text = text.substring(0, 10000)
+    }
+
+    if (text.length < 50) {
+      return { error: 'Page appears empty or requires JavaScript to render' }
+    }
+
+    const anthropic = new Anthropic({ apiKey })
+
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 2048,
+      temperature: 0.1,
+      messages: [{
+        role: 'user',
+        content: `Extract job posting details from this page text. The URL is: ${url}
+
+Page text:
+${text}
+
+Return ONLY valid JSON with these fields:
+{
+  "title": "job title",
+  "company": "company name",
+  "description": "full job description text",
+  "requirements": "requirements/qualifications if separate from description, or null",
+  "location": "work location or Remote, or null if not mentioned",
+  "salary": "salary/compensation if mentioned, or null"
+}
+
+If this page does NOT appear to be a job posting, return: {"error": "not_a_job_posting"}
+
+Return ONLY the JSON object, no markdown or explanation.`
+      }]
+    })
+
+    const responseText = message.content[0]
+    if (responseText.type !== 'text') {
+      return { error: 'Unexpected AI response type' }
+    }
+
+    const jsonMatch = responseText.text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      return { error: 'Failed to parse AI response' }
+    }
+
+    const result = JSON.parse(jsonMatch[0])
+
+    if (result.error) {
+      return { error: result.error }
+    }
+
+    if (!result.title || !result.company) {
+      return { error: 'Could not extract job title or company from page' }
+    }
+
+    return {
+      title: result.title,
+      company: result.company,
+      description: result.description || '',
+      requirements: result.requirements || undefined,
+      location: result.location || undefined,
+      salary: result.salary || undefined
+    }
+  } catch (error) {
+    console.error('[Import] AI extraction error:', error)
+    return { error: error instanceof Error ? error.message : 'AI extraction failed' }
   }
 }

@@ -9,6 +9,7 @@ import {
   ArrowPathIcon,
   HandThumbUpIcon,
   HandThumbDownIcon,
+  LinkIcon,
 } from '@heroicons/react/24/outline'
 
 interface JobOpportunity {
@@ -74,6 +75,9 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
   const [scanning, setScanning] = useState(false)
   const [scanResult, setScanResult] = useState<string | null>(null)
   const [feedbackLoading, setFeedbackLoading] = useState<string | null>(null)
+  const [importUrl, setImportUrl] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState<string | null>(null)
 
   // Debounce search input
   useEffect(() => {
@@ -99,7 +103,12 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ opportunityId: jobId, feedback })
       })
-      if (response.ok) {
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        alert(errData.error || "Failed to save feedback")
+        return
+      }
+      {
         const data = await response.json()
         if (data.deleted) {
           setJobs(prev => prev.filter(j => j.id !== jobId))
@@ -112,6 +121,45 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
       alert('Failed to save feedback. Please try again.')
     } finally {
       setFeedbackLoading(null)
+    }
+  }
+
+  const handleImportUrl = async () => {
+    if (!importUrl.trim()) return
+    try {
+      new URL(importUrl)
+    } catch {
+      setImportResult('Invalid URL format')
+      setTimeout(() => setImportResult(null), 5000)
+      return
+    }
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const response = await fetch('/api/opportunities/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: importUrl.trim() })
+      })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        const opp = data.opportunity
+        if (data.existing) {
+          setImportResult(`Already imported: ${opp.title} at ${opp.company}`)
+        } else {
+          setImportResult(`Imported: ${opp.title} at ${opp.company} (${opp.fitScore}% fit)`)
+        }
+        setImportUrl('')
+        loadJobs()
+      } else {
+        setImportResult(data.error || 'Import failed')
+      }
+    } catch (error) {
+      console.error('Import error:', error)
+      setImportResult('Failed to import. Please try again.')
+    } finally {
+      setImporting(false)
+      setTimeout(() => setImportResult(null), 8000)
     }
   }
 
@@ -355,6 +403,30 @@ export default function JobOpportunities({ userId, onApplicationCreated }: JobOp
             </button>
           </div>
         </div>
+
+        {/* URL Import */}
+        <div className="flex gap-2 mt-3">
+          <input
+            type="url"
+            value={importUrl}
+            onChange={(e) => setImportUrl(e.target.value)}
+            placeholder="Paste job URL to import..."
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-700 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+            disabled={importing}
+            onKeyDown={(e) => e.key === 'Enter' && importUrl && handleImportUrl()}
+          />
+          <button
+            onClick={handleImportUrl}
+            disabled={importing || !importUrl.trim()}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
+          >
+            <LinkIcon className="h-4 w-4" />
+            {importing ? 'Importing...' : 'Import'}
+          </button>
+        </div>
+        {importResult && (
+          <p className={"text-sm mt-2 " + (importResult.startsWith('Already') || importResult.startsWith('Imported') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400')}>{importResult}</p>
+        )}
 
         {/* Filters */}
         <div className="flex gap-4 items-center flex-wrap">
