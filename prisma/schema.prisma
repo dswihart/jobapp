@@ -300,7 +300,59 @@ model UserJobSource {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  companyId String?  @map("company_id")
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
   @@map("user_job_sources")
+}
+
+// Target Company Pipeline — seeded US-HQ SMB tech companies with Spain presence.
+// Phase 1 (2026-04-23). See .planning/phases/01-target-company-pipeline-us-spain-bridge/01-SPEC.md
+enum AtsPlatform {
+  greenhouse
+  lever
+  ashby
+  workable
+  workday
+  custom
+}
+
+enum CompanyStatus {
+  active
+  paused
+  rejected
+}
+
+enum SpainPresenceEvidence {
+  manual
+  careers_page
+}
+
+enum DiscoverySource {
+  manual
+  automated
+}
+
+model Company {
+  id                     String                 @id @default(cuid())
+  name                   String                 @unique
+  careersUrl             String                 @unique @map("careers_url")
+  atsPlatform            AtsPlatform            @map("ats_platform")
+  atsSlug                String?                @map("ats_slug")
+  status                 CompanyStatus          @default(active)
+  spainPresenceEvidence  SpainPresenceEvidence? @map("spain_presence_evidence")
+  spainPresenceUrl       String?                @map("spain_presence_url")
+  hqCountry              String                 @default("US") @map("hq_country")
+  sizeBand               String?                @map("size_band")
+  discoverySource        DiscoverySource        @default(manual) @map("discovery_source")
+  lastScrapedAt          DateTime?              @map("last_scraped_at")
+  lastScrapeError        String?                @map("last_scrape_error")
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
+
+  userJobSources UserJobSource[]
+
+  @@map("companies")
 }
 
 

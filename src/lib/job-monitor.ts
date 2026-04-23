@@ -9,6 +9,7 @@ import { calculateRejectionPenalty } from './pattern-learning-service'
 // Hardcoded sources removed - all sources are DB-driven via user_job_sources
 
 import { fetchFromUserSources } from './user-sources-fetcher'
+import { fetchFromTargetCompanies } from './sources/target-companies-fetcher'
 import { extractSkillsFromJob, saveSkillsToDatabase } from './skill-service'
 
 /**
@@ -255,6 +256,17 @@ async function fetchFromAllSources(userId: string): Promise<JobPosting[]> {
     allJobs.push(...userJobs)
   } catch (error) {
     console.error('[Job Aggregator] Error fetching user sources:', error)
+  }
+
+  // Fetch from target companies (Phase 1: US-HQ SMB tech with Spain presence).
+  // Companies are global; the same jobs are considered for every user with autoScan.
+  // Fit-score per-user handles relevance ranking. See .planning/phases/01-.../01-SPEC.md
+  try {
+    const targetJobs = await fetchFromTargetCompanies()
+    console.log('[Job Aggregator] Found ' + targetJobs.length + ' Spain-filtered jobs from target companies')
+    allJobs.push(...targetJobs)
+  } catch (error) {
+    console.error('[Job Aggregator] Error fetching target companies:', error)
   }
 
   // Remove duplicates by jobUrl

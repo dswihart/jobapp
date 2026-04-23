@@ -1,0 +1,112 @@
+[
+  {
+    "name": "Vercel",
+    "careersUrl": "https://vercel.com/careers",
+    "atsPlatform": "ashby",
+    "atsSlug": "vercel",
+    "hqCountry": "US",
+    "sizeBand": "200-500",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://vercel.com/careers",
+    "status": "active"
+  },
+  {
+    "name": "Zapier",
+    "careersUrl": "https://zapier.com/jobs",
+    "atsPlatform": "lever",
+    "atsSlug": "zapier",
+    "hqCountry": "US",
+    "sizeBand": "500-1000",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://zapier.com/jobs",
+    "status": "active"
+  },
+  {
+    "name": "Netlify",
+    "careersUrl": "https://www.netlify.com/careers",
+    "atsPlatform": "greenhouse",
+    "atsSlug": "netlify",
+    "hqCountry": "US",
+    "sizeBand": "200-500",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://www.netlify.com/careers",
+    "status": "active"
+  },
+  {
+    "name": "Supabase",
+    "careersUrl": "https://supabase.com/careers",
+    "atsPlatform": "ashby",
+    "atsSlug": "supabase",
+    "hqCountry": "US",
+    "sizeBand": "50-200",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://supabase.com/careers",
+    "status": "active"
+  },
+  {
+    "name": "PostHog",
+    "careersUrl": "https://posthog.com/careers",
+    "atsPlatform": "ashby",
+    "atsSlug": "posthog",
+    "hqCountry": "US",
+    "sizeBand": "50-200",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://posthog.com/careers",
+    "status": "active"
+  },
+  {
+    "name": "Linear",
+    "careersUrl": "https://linear.app/careers",
+    "atsPlatform": "ashby",
+    "atsSlug": "linear",
+    "hqCountry": "US",
+    "sizeBand": "50-200",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://linear.app/careers",
+    "status": "active"
+  },
+  {
+    "name": "Clerk",
+    "careersUrl": "https://clerk.com/careers",
+    "atsPlatform": "ashby",
+    "atsSlug": "clerk",
+    "hqCountry": "US",
+    "sizeBand": "50-200",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://clerk.com/careers",
+    "status": "active"
+  },
+  {
+    "name": "WorkOS",
+    "careersUrl": "https://workos.com/careers",
+    "atsPlatform": "ashby",
+    "atsSlug": "workos",
+    "hqCountry": "US",
+    "sizeBand": "50-200",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://workos.com/careers",
+    "status": "active"
+  },
+  {
+    "name": "Resend",
+    "careersUrl": "https://resend.com/careers",
+    "atsPlatform": "ashby",
+    "atsSlug": "resend",
+    "hqCountry": "US",
+    "sizeBand": "10-50",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://resend.com/careers",
+    "status": "active"
+  },
+  {
+    "name": "Remote",
+    "careersUrl": "https://remote.com/careers",
+    "atsPlatform": "ashby",
+    "atsSlug": "remotecom",
+    "hqCountry": "US",
+    "sizeBand": "1000-2000",
+    "spainPresenceEvidence": "careers_page",
+    "spainPresenceUrl": "https://remote.com/careers",
+    "status": "active"
+  }
+]

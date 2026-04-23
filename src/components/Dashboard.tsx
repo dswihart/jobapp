@@ -3,7 +3,7 @@ import { SparklesIcon, ChartBarIcon } from '@heroicons/react/24/outline'
 
 import { useState, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
-import { AcademicCapIcon, ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline'
+import { AcademicCapIcon, ArrowRightOnRectangleIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline'
 import EnhancedProfileEditor from './EnhancedProfileEditor'
 import ThemeToggle from './ThemeToggle'
 import UnifiedNotificationsPanel from './UnifiedNotificationsPanel'
@@ -95,6 +95,14 @@ export default function Dashboard() {
                 >
                   <AcademicCapIcon className="h-4 w-4 sm:h-5 sm:w-5" />
                   <span>Skills</span>
+                </a>
+                <a
+                  href="/companies"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg flex items-center space-x-1 sm:space-x-2 text-sm sm:text-base"
+                >
+                  <BuildingOffice2Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="hidden sm:inline">Target Companies</span>
+                  <span className="sm:hidden">Targets</span>
                 </a>
                 <button
                   onClick={() => setIsProfileModalOpen(true)} aria-label="Open profile settings"
