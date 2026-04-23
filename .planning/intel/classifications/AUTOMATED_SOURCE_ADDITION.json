@@ -1,0 +1,30 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/AUTOMATED_SOURCE_ADDITION.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Fully Automated Job Source Addition",
+  "summary": "User guide explaining how to add new job sources through the web UI with automatic file generation, build, and deployment.",
+  "scope": [
+    "job source addition workflow",
+    "web UI dashboard",
+    "source integration files",
+    "automatic deployment",
+    "source templates",
+    "API authentication",
+    "rate limiting",
+    "source troubleshooting"
+  ],
+  "cross_refs": [
+    "/opt/job-tracker/docs/HOW_TO_ADD_JOB_SOURCES.md",
+    "/opt/job-tracker/docs/TEMPLATE-source.example",
+    "/opt/job-tracker/docs/QUICK_ADD_SOURCE.md",
+    "docs/TEMPLATE-source.example",
+    "src/lib/sources/custom-source.ts",
+    "/opt/job-tracker/src/lib/sources/linkedin-source.ts",
+    "/opt/job-tracker/.env.local"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

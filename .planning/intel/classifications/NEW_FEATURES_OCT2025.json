@@ -1,0 +1,25 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/NEW_FEATURES_OCT2025.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "New Features - October 2025",
+  "summary": "Release notes and user guide describing the PENDING application status and Unified Notifications Panel added to Job Tracker on October 20, 2025.",
+  "scope": [
+    "PENDING application status",
+    "Unified Notifications Panel",
+    "Application Board",
+    "Application List",
+    "Progress Chart",
+    "Job Alerts",
+    "Follow-up Reminders",
+    "UnifiedNotificationsPanel component",
+    "ApplicationStatus enum"
+  ],
+  "cross_refs": [
+    "/opt/job-tracker/docs/JOB_TRACKER_DOCUMENTATION.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

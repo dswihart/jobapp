@@ -1,0 +1,28 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/job-scanning-fix-20251022.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Job Scanning Investigation and Fix - 2025-10-22",
+  "summary": "Investigation writeup documenting root causes and applied fixes for broken autoScan default and tech-only job source coverage.",
+  "scope": [
+    "job scanning",
+    "autoScan default",
+    "user registration",
+    "Prisma schema",
+    "job sources",
+    "fit score threshold",
+    "onboarding"
+  ],
+  "cross_refs": [
+    "src/app/api/auth/register/route.ts",
+    "prisma/schema.prisma",
+    "/api/cron/scan-jobs",
+    "/api/monitor",
+    "src/lib/job-monitor.ts",
+    "src/lib/sources/*.ts"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

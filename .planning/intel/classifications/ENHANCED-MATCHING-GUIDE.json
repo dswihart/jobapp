@@ -1,0 +1,30 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/ENHANCED_MATCHING_GUIDE.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Enhanced Job Matching with CV Upload & LLM Integration",
+  "summary": "User and developer guide for the enhanced job-matching feature covering CV upload, AI-driven profile extraction, API usage, matching algorithm, migration, and troubleshooting.",
+  "scope": [
+    "CV/resume upload",
+    "AI profile extraction",
+    "EnhancedProfileEditor UI",
+    "CVUpload UI component",
+    "matching algorithm",
+    "Claude 3.5 Sonnet integration",
+    "users database schema",
+    "profile API endpoints",
+    "deployment migration"
+  ],
+  "cross_refs": [
+    "/opt/job-tracker/docs/migration-enhanced-profile.sql",
+    "https://console.anthropic.com/",
+    "https://docs.anthropic.com/",
+    "https://docs.anthropic.com/claude/reference/",
+    "https://www.npmjs.com/package/pdf-parse",
+    "https://www.prisma.io/docs/concepts/components/prisma-schema/data-model#json"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

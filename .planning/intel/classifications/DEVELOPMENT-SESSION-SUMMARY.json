@@ -1,0 +1,38 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/DEVELOPMENT-SESSION-SUMMARY.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Development Session Summary - Job Tracker Fixes",
+  "summary": "Retrospective session summary documenting fixes to job scanning, unified source management, and goal tracker timezone handling.",
+  "scope": [
+    "job scanning",
+    "autoScan feature",
+    "job sources management",
+    "JobSourcesManager component",
+    "JobSearchSettings component",
+    "Dashboard goal tracker",
+    "Prisma schema",
+    "user registration",
+    "timezone handling"
+  ],
+  "cross_refs": [
+    "prisma/schema.prisma",
+    "src/components/JobSourcesManager.tsx",
+    "src/components/JobSearchSettings.tsx",
+    "src/components/Dashboard.tsx",
+    "src/app/api/auth/register/route.ts",
+    "src/app/api/user-job-sources/route.ts",
+    "src/lib/sources/index.ts",
+    "/opt/job-tracker/scripts/SOURCES-SUMMARY.md",
+    "/opt/job-tracker/scripts/README-SOURCES.md",
+    "/opt/job-tracker/scripts/manage-job-sources.sql",
+    "/opt/job-tracker/scripts/UNIFIED-SOURCES-COMPLETE.md",
+    "/opt/job-tracker/scripts/FINAL-STATUS.md",
+    "/opt/job-tracker/scripts/copy-sources.sh",
+    "/opt/job-tracker/docs/job-scanning-fix-20251022.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

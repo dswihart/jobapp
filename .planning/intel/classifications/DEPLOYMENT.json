@@ -1,0 +1,33 @@
+{
+  "source_path": "/Users/dan/code/jobapp/DEPLOYMENT.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Deployment Guide",
+  "summary": "Step-by-step deployment guide for local development and production on server 46.62.205.150 via Docker, manual setup, or Vercel.",
+  "scope": [
+    "local development setup",
+    "Docker deployment",
+    "manual server deployment",
+    "Vercel deployment",
+    "Nginx reverse proxy",
+    "PostgreSQL database setup",
+    "Prisma migrations",
+    "environment variables",
+    "monitoring and maintenance",
+    "troubleshooting",
+    "security considerations"
+  ],
+  "cross_refs": [
+    ".env.example",
+    ".env.local",
+    "package.json",
+    "http://localhost:3000",
+    "http://46.62.205.150:3000",
+    "https://vercel.com",
+    "https://github.com/yourusername/job-tracker.git"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

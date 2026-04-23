@@ -1,0 +1,25 @@
+{
+  "source_path": "/Users/dan/code/jobapp/AUTO_ARCHIVE_README.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Automatic Job Archiving Feature",
+  "summary": "Operational guide and runbook for the automatic job-archiving cron feature that moves applications older than 30 days to ARCHIVED status.",
+  "scope": [
+    "job archiving",
+    "cron job",
+    "archive-jobs API endpoint",
+    "run-archive-cron.sh script",
+    "crontab configuration",
+    "archive logs",
+    "troubleshooting"
+  ],
+  "cross_refs": [
+    "/opt/job-tracker/src/app/api/cron/archive-jobs/route.ts",
+    "/opt/job-tracker/scripts/run-archive-cron.sh",
+    "/var/log/job-tracker-archive.log"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

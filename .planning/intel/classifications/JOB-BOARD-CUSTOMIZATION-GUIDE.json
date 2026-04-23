@@ -1,0 +1,34 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/JOB_BOARD_CUSTOMIZATION_GUIDE.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Job Board Monitoring Customization Guide",
+  "summary": "Tutorial guide for customizing the job monitoring system's matching algorithm, integrating real job board APIs, adding search preferences, and scheduling automated scans.",
+  "scope": [
+    "job monitoring system",
+    "fit score algorithm",
+    "skill matching",
+    "experience matching",
+    "job board API integration",
+    "Adzuna API",
+    "The Muse API",
+    "Remotive API",
+    "RSS feeds",
+    "web scraping",
+    "user preferences",
+    "Prisma schema",
+    "cron scheduling",
+    "node-cron"
+  ],
+  "cross_refs": [
+    "/opt/job-tracker/src/lib/job-monitor.ts",
+    "/opt/job-tracker/src/lib/ai-service.ts",
+    "/opt/job-tracker/prisma/schema.prisma",
+    "/opt/job-tracker/src/lib/scheduler.ts",
+    "job-board-integrations.ts"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

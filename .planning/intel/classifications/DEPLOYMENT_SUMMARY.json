@@ -1,0 +1,41 @@
+{
+  "source_path": "/Users/dan/code/jobapp/DEPLOYMENT_SUMMARY.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "AI-Powered Job Application Tracker - Deployment Summary",
+  "summary": "Deployment guide and status summary for the AI-Powered Job Application Tracker, covering build status, features, deployment steps, and environment setup.",
+  "scope": [
+    "Job Application Tracker",
+    "Next.js frontend",
+    "Prisma ORM",
+    "PostgreSQL database",
+    "Deployment to server 46.62.205.150",
+    "Dashboard",
+    "Kanban Board",
+    "Application CRUD",
+    "Contact tracking",
+    "User profile",
+    "Environment variables",
+    "Database schema"
+  ],
+  "cross_refs": [
+    "deploy-windows.ps1",
+    ".env.example",
+    ".env.local",
+    "README.md",
+    "Dockerfile",
+    "docker-compose.yml",
+    "prisma/schema.prisma",
+    "src/components/Dashboard.tsx",
+    "src/components/ApplicationList.tsx",
+    "src/components/ApplicationBoard.tsx",
+    "src/components/ProgressChart.tsx",
+    "src/components/ApplicationModal.tsx",
+    "src/components/ProfileModal.tsx",
+    "src/lib/prisma.ts"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

@@ -1,0 +1,33 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/CUSTOMIZATION_QUICK_START.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Job Search Customization - Quick Start Guide",
+  "summary": "Quick-start tutorial with copy-paste snippets for customizing the job tracker's skills, fit score, job age, AI weights, job boards, and cron scans.",
+  "scope": [
+    "job-tracker service",
+    "user profile skills",
+    "minimum fit score threshold",
+    "job age filter",
+    "AI scoring weights",
+    "job board integrations (Remotive, The Muse)",
+    "tech keyword list",
+    "automated cron scanning",
+    "Dashboard settings UI",
+    "troubleshooting and log inspection"
+  ],
+  "cross_refs": [
+    "/opt/job-tracker/src/lib/job-monitor.ts",
+    "/opt/job-tracker/src/lib/ai-service.ts",
+    "/opt/job-tracker/src/components/Dashboard.tsx",
+    "docs/job-monitor-multi-source.ts",
+    "/opt/job-tracker/docs/JOB_BOARD_CUSTOMIZATION_GUIDE.md",
+    "/opt/job-tracker/docs/job-board-integrations.ts",
+    "/opt/job-tracker/docs/REMOTIVE_INTEGRATION_SUCCESS.md",
+    "/opt/job-tracker/docs/CUSTOMIZATION_QUICK_START.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

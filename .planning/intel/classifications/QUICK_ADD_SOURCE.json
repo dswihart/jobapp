@@ -1,0 +1,19 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/QUICK_ADD_SOURCE.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Quick Reference: Add a Job Source",
+  "summary": "Quick-reference tutorial covering the 5-step process to add, register, deploy, and test a new job source integration.",
+  "scope": ["job sources", "source registration", "matching algorithm", "deployment", "job-tracker service"],
+  "cross_refs": [
+    "/opt/job-tracker/docs/HOW_TO_ADD_JOB_SOURCES.md",
+    "/opt/job-tracker/docs/TEMPLATE-source.example",
+    "/opt/job-tracker/docs/CUSTOMIZATION_QUICK_START.md",
+    "/opt/job-tracker/src/lib/sources/index.ts",
+    "/opt/job-tracker/src/lib/sources/indeed-source.ts"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

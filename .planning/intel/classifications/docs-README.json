@@ -1,0 +1,27 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/README.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Job Tracker Documentation",
+  "summary": "Index and navigation page linking to Job Tracker documentation files, quick links, and recent update notes.",
+  "scope": [
+    "Job Tracker application",
+    "documentation index",
+    "deployment references",
+    "recent updates log"
+  ],
+  "cross_refs": [
+    "./JOB_TRACKER_DOCUMENTATION.md",
+    "./NEW_FEATURES_OCT2025.md",
+    "AUTOMATED_SOURCE_ADDITION.md",
+    "CUSTOMIZATION_QUICK_START.md",
+    "ENHANCED_MATCHING_GUIDE.md",
+    "HOW_TO_ADD_JOB_SOURCES.md",
+    "JOB_BOARD_CUSTOMIZATION_GUIDE.md",
+    "REMOTIVE_INTEGRATION_SUCCESS.md"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": "Slug prefixed with parent dir to avoid collision with top-level README.json in same output directory."
+}

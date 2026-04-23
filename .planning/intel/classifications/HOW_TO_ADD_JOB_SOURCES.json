@@ -1,0 +1,34 @@
+{
+  "source_path": "/Users/dan/code/jobapp/docs/HOW_TO_ADD_JOB_SOURCES.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "How to Add Your Own Job Sources",
+  "summary": "Step-by-step tutorial for extending the job tracker with custom job board sources using the BaseJobSource class.",
+  "scope": [
+    "job tracker",
+    "job sources",
+    "BaseJobSource class",
+    "JobSourceConfig",
+    "job-monitor.ts",
+    "sources/index.ts",
+    "API integration",
+    "RSS feed integration",
+    "skill matching",
+    "recency filtering",
+    "fit score",
+    "deployment"
+  ],
+  "cross_refs": [
+    "/opt/job-tracker/src/lib/job-monitor.ts",
+    "/opt/job-tracker/sources/TEMPLATE-source.ts",
+    "/opt/job-tracker/sources/index.ts",
+    "/opt/job-tracker/src/lib/sources/",
+    "/opt/job-tracker/src/lib/",
+    "/opt/job-tracker/sources/remotive-source.ts",
+    "/opt/job-tracker/sources/themuse-source.ts"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

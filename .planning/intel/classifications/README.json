@@ -1,0 +1,28 @@
+{
+  "source_path": "/Users/dan/code/jobapp/README.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "AI-Powered Job Application Tracker",
+  "summary": "Project README covering features, tech stack, setup, API endpoint list, deployment, and project structure for a Next.js job application tracker.",
+  "scope": [
+    "job application tracker",
+    "Next.js frontend",
+    "Prisma ORM",
+    "PostgreSQL database",
+    "API routes",
+    "dashboard",
+    "kanban board",
+    "contact tracking",
+    "deployment",
+    "project structure"
+  ],
+  "cross_refs": [
+    "./docs/JOB_TRACKER_DOCUMENTATION.md",
+    "./docs/",
+    "LICENSE"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}

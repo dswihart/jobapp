@@ -1,0 +1,25 @@
+{
+  "source_path": "/Users/dan/code/jobapp/SORTING_FEATURE.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "Column Sorting Feature - Implementation Summary",
+  "summary": "Post-implementation summary documenting the column sorting feature added to the job applications list view in ApplicationList.tsx.",
+  "scope": [
+    "ApplicationList component",
+    "column sorting",
+    "sort state management",
+    "sort direction toggling",
+    "sort visual indicators",
+    "job applications table",
+    "status filter interaction",
+    "job-tracker service deployment"
+  ],
+  "cross_refs": [
+    "/opt/job-tracker/src/components/ApplicationList.tsx",
+    "/opt/job-tracker/src/components/ApplicationList.tsx.backup"
+  ],
+  "locked": false,
+  "precedence": null,
+  "notes": ""
+}
