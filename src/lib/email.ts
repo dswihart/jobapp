@@ -189,11 +189,16 @@ export interface JobSearchSummaryStats {
   positiveOutcomes: number   // outcomes that were passed / moved_forward
 }
 
-export interface JobSearchForecast {
-  offerLikelihoodPct: number // estimated % chance of an offer by month-end
+export interface JobSearchForecastHorizon {
+  offerLikelihoodPct: number // estimated % chance of an offer by this month-end
   liveProcesses: number      // active interview processes feeding the estimate
-  daysLeft: number           // days remaining in the current month
+  daysLeft: number           // days remaining until this horizon
   monthLabel: string         // e.g. "June 30"
+}
+
+export interface JobSearchForecast {
+  thisMonth: JobSearchForecastHorizon
+  nextMonth: JobSearchForecastHorizon
 }
 
 export interface JobSearchSummary {
@@ -299,14 +304,25 @@ export async function sendJobSearchSummaryEmail(
       <h2 style="margin-bottom:2px">Your 2-Week Job-Search Summary</h2>
       <p style="color:#64748b;margin-top:0">${fmtDate(rangeStart)} – ${fmtDate(rangeEnd)}</p>
 
-      ${forecast.liveProcesses > 0
-        ? `<div style="margin-top:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px;text-align:center">
-            <div style="color:#166534;font-size:15px">🎯 Likelihood of an offer by ${forecast.monthLabel}: <b style="font-size:19px">~${forecast.offerLikelihoodPct}%</b></div>
-            <div style="color:#4b5563;font-size:12px;margin-top:5px">Estimate from ${forecast.liveProcesses} live interview ${forecast.liveProcesses === 1 ? 'process' : 'processes'}${advanceRate !== null ? ` &middot; ${advanceRate}% advance rate` : ''} &middot; ${forecast.daysLeft} day${forecast.daysLeft === 1 ? '' : 's'} left</div>
-            <div style="color:#9ca3af;font-size:11px;margin-top:4px">Rough estimate from your activity — not a guarantee</div>
+      ${forecast.nextMonth.liveProcesses > 0
+        ? `<div style="margin-top:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px">
+            <div style="color:#166534;font-size:14px;font-weight:600;text-align:center;margin-bottom:10px">🎯 Likelihood of securing an offer</div>
+            <table style="width:100%;border-collapse:collapse"><tr>
+              <td style="text-align:center;padding:4px;border-right:1px solid #bbf7d0;width:50%">
+                <div style="font-size:13px;color:#4b5563">by ${forecast.thisMonth.monthLabel}</div>
+                <div style="font-size:22px;font-weight:700;color:#166534">${forecast.thisMonth.offerLikelihoodPct > 0 ? '~' + forecast.thisMonth.offerLikelihoodPct + '%' : 'low'}</div>
+                <div style="font-size:11px;color:#9ca3af">${forecast.thisMonth.liveProcesses} live &middot; ${forecast.thisMonth.daysLeft}d left</div>
+              </td>
+              <td style="text-align:center;padding:4px;width:50%">
+                <div style="font-size:13px;color:#4b5563">by ${forecast.nextMonth.monthLabel}</div>
+                <div style="font-size:22px;font-weight:700;color:#166534">~${forecast.nextMonth.offerLikelihoodPct}%</div>
+                <div style="font-size:11px;color:#9ca3af">${forecast.nextMonth.liveProcesses} live &middot; ${forecast.nextMonth.daysLeft}d left</div>
+              </td>
+            </tr></table>
+            <div style="color:#9ca3af;font-size:11px;text-align:center;margin-top:8px">Rough estimate from your activity${advanceRate !== null ? ` (${advanceRate}% advance rate)` : ''} — not a guarantee</div>
           </div>`
         : `<div style="margin-top:14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;text-align:center">
-            <div style="color:#991b1b;font-size:14px">🎯 No active interview processes right now — an offer by ${forecast.monthLabel} is unlikely. Keep applications flowing.</div>
+            <div style="color:#991b1b;font-size:14px">🎯 No active interview processes right now — an offer by ${forecast.nextMonth.monthLabel} is unlikely. Keep applications flowing.</div>
           </div>`}
 
       <p style="color:#64748b;font-size:13px;margin:18px 0 8px;font-weight:600">Last 2 weeks</p>

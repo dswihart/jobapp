@@ -110,29 +110,38 @@ export async function POST() {
       i => i.outcome === 'passed' || i.outcome === 'moved_forward'
     ).length
 
-    // ── Likelihood of securing an offer by the end of THIS month ──────────────
+    // ── Likelihood of securing an offer by a given month-end ──────────────────
     // Transparent heuristic (not a promise): the chance that at least one "live"
-    // interview process closes to an offer in the days remaining, scaled by the
-    // user's demonstrated advance rate and how much time is left.
-    const endOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59))
-    const daysLeft = Math.max(1, Math.ceil((endOfMonth.getTime() - now.getTime()) / 86_400_000))
+    // interview process closes to an offer before the horizon, scaled by the
+    // user's demonstrated advance rate and how much time is left. Computed for
+    // both this month-end and next month-end.
+    const advanceRateNum = recordedOutcomes > 0 ? positiveOutcomes / recordedOutcomes : 0.35
     const dead = ['failed', 'no-show', 'cancelled']
     const recentCutoff = new Date(now.getTime() - 21 * 86_400_000)
-    const liveAppIds = new Set<string>()
-    for (const i of interviews) {
-      const upcomingThisMonth =
-        ['scheduled', 'rescheduled'].includes(i.status) && i.scheduledDate > now && i.scheduledDate <= endOfMonth
-      const recentlyActive =
-        i.scheduledDate <= now && i.scheduledDate >= recentCutoff && !dead.includes(i.status) && i.outcome !== 'failed'
-      if (upcomingThisMonth || recentlyActive) liveAppIds.add(i.applicationId)
+    const forecastByMonthEnd = (endDate: Date) => {
+      const daysLeft = Math.max(1, Math.ceil((endDate.getTime() - now.getTime()) / 86_400_000))
+      const liveAppIds = new Set<string>()
+      for (const i of interviews) {
+        const upcoming =
+          ['scheduled', 'rescheduled'].includes(i.status) && i.scheduledDate > now && i.scheduledDate <= endDate
+        const recentlyActive =
+          i.scheduledDate <= now && i.scheduledDate >= recentCutoff && !dead.includes(i.status) && i.outcome !== 'failed'
+        if (upcoming || recentlyActive) liveAppIds.add(i.applicationId)
+      }
+      const liveProcesses = liveAppIds.size
+      const timeFactor = Math.min(1, Math.max(0.08, daysLeft / 25)) // a fast remaining loop ≈ 25 days
+      const perProcess = advanceRateNum * 0.4 * timeFactor // 0.4 = base P(a live process → offer | advancing, time)
+      const likelihood = liveProcesses > 0 ? 1 - Math.pow(1 - perProcess, liveProcesses) : 0
+      const offerLikelihoodPct = liveProcesses > 0 ? Math.max(2, Math.min(80, Math.round(likelihood * 100))) : 0
+      const monthLabel = endDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })
+      return { offerLikelihoodPct, liveProcesses, daysLeft, monthLabel }
     }
-    const liveProcesses = liveAppIds.size
-    const advanceRateNum = recordedOutcomes > 0 ? positiveOutcomes / recordedOutcomes : 0.35
-    const timeFactor = Math.min(1, Math.max(0.08, daysLeft / 25)) // a fast remaining loop ≈ 25 days
-    const perProcess = advanceRateNum * 0.4 * timeFactor // 0.4 = base P(a live process → offer | advancing, time)
-    const likelihood = liveProcesses > 0 ? 1 - Math.pow(1 - perProcess, liveProcesses) : 0
-    const offerLikelihoodPct = liveProcesses > 0 ? Math.max(2, Math.min(80, Math.round(likelihood * 100))) : 0
-    const monthLabel = endOfMonth.toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' })
+    const endThisMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0, 23, 59, 59))
+    const endNextMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 0, 23, 59, 59))
+    const forecast = {
+      thisMonth: forecastByMonthEnd(endThisMonth),
+      nextMonth: forecastByMonthEnd(endNextMonth),
+    }
 
     await sendJobSearchSummaryEmail(toEmail, {
       rangeStart,
@@ -141,7 +150,7 @@ export async function POST() {
       completedInterviews,
       upcomingInterviews,
       stats: { totalApplied, interviewedApps, recordedOutcomes, positiveOutcomes },
-      forecast: { offerLikelihoodPct, liveProcesses, daysLeft, monthLabel },
+      forecast,
     })
 
     return NextResponse.json({
