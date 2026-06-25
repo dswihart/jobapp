@@ -18,6 +18,7 @@ import {
   XCircleIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
+import SummaryEmailButton from './SummaryEmailButton'
 
 interface Interviewer {
   id: string
@@ -52,6 +53,7 @@ interface Interview {
   followUpSteps?: Array<{ priority: string; action: string; timing: string; reason: string }>
   analyzedAt?: string
   companyFeedback?: string
+  autoDetected?: boolean
   interviewers: Interviewer[]
   application?: {
     id: string
@@ -87,7 +89,7 @@ export default function InterviewsSection({
         params.set('status', 'completed')
       }
 
-      const response = await fetch('/api/interviews?' + params.toString())
+      const response = await fetch('/api/interviews?' + params.toString(), { cache: 'no-store' })
       const data = await response.json()
 
       if (data.interviews) {
@@ -103,6 +105,34 @@ export default function InterviewsSection({
   useEffect(() => {
     fetchInterviews()
   }, [fetchInterviews, refreshTrigger])
+
+  // Re-pull when the user returns to the tab/window so interviews created
+  // out-of-band (the email-sync cron, another device) surface without a manual
+  // reload. Without this, the list only ever reflects in-page actions.
+  useEffect(() => {
+    const refetchIfVisible = () => {
+      if (document.visibilityState === 'visible') fetchInterviews()
+    }
+    window.addEventListener('focus', refetchIfVisible)
+    document.addEventListener('visibilitychange', refetchIfVisible)
+    return () => {
+      window.removeEventListener('focus', refetchIfVisible)
+      document.removeEventListener('visibilitychange', refetchIfVisible)
+    }
+  }, [fetchInterviews])
+
+  const confirmAutoDetected = async (interviewId: string) => {
+    try {
+      await fetch('/api/interviews/' + interviewId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ autoDetected: false }),
+      })
+      fetchInterviews()
+    } catch (error) {
+      console.error('Error confirming interview:', error)
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -188,13 +218,16 @@ export default function InterviewsSection({
               {interviews.length}
             </span>
           </div>
-          <button
-            onClick={() => onCreateInterview()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <PlusIcon className="h-5 w-5" />
-            <span className="hidden sm:inline">Add Interview</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <SummaryEmailButton />
+            <button
+              onClick={() => onCreateInterview()}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <PlusIcon className="h-5 w-5" />
+              <span className="hidden sm:inline">Add Interview</span>
+            </button>
+          </div>
         </div>
 
         <div className="flex gap-2">
@@ -266,7 +299,7 @@ export default function InterviewsSection({
                     </span>
                   </div>
 
-                  {interview.interviewers.length > 0 && (
+                  {(interview.interviewers?.length ?? 0) > 0 && (
                     <div className="flex items-center gap-2 mt-2 text-sm text-gray-500 dark:text-gray-400">
                       <UserGroupIcon className="h-4 w-4" />
                       <span>{interview.interviewers.map(i => i.name).join(', ')}</span>
@@ -294,6 +327,30 @@ export default function InterviewsSection({
                   </button>
                 </div>
               </div>
+
+              {interview.autoDetected && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
+                  <span className="flex items-center gap-1.5 text-sm text-amber-800 dark:text-amber-300">
+                    <SparklesIcon className="h-4 w-4" />
+                    Auto-detected from your email — review the date/time, then confirm.
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => onOpenInterviewDetail(interview)}
+                      className="px-3 py-1 text-sm font-medium text-amber-800 hover:underline dark:text-amber-300"
+                    >
+                      Review
+                    </button>
+                    <button
+                      onClick={() => confirmAutoDetected(interview.id)}
+                      className="flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700"
+                    >
+                      <CheckCircleIcon className="h-4 w-4" />
+                      Confirm
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {expandedId === interview.id && (
                 <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-4">
@@ -324,7 +381,7 @@ export default function InterviewsSection({
                     )}
                   </div>
 
-                  {interview.interviewers.length > 0 && (
+                  {(interview.interviewers?.length ?? 0) > 0 && (
                     <div>
                       <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Interviewers</h4>
                       <div className="flex flex-wrap gap-2">

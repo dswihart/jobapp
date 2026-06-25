@@ -113,6 +113,12 @@ export async function PATCH(
     if (data.aiAnalysis !== undefined) updateData.aiAnalysis = data.aiAnalysis
     if (data.followUpSteps !== undefined) updateData.followUpSteps = data.followUpSteps
     if (data.analyzedAt !== undefined) updateData.analyzedAt = data.analyzedAt ? new Date(data.analyzedAt) : null
+    // Confirming an auto-detected interview clears the suppression stamp so the
+    // reminder cron will email about it once (when it enters the 24h window).
+    if (data.autoDetected !== undefined) {
+      updateData.autoDetected = Boolean(data.autoDetected)
+      if (data.autoDetected === false) updateData.reminderSentAt = null
+    }
 
     // Update the interview
     const interview = await prisma.interview.update({

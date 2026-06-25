@@ -64,6 +64,9 @@ type AiEmailVerdict = {
   role: string | null
   summary: string | null
   confidence: number
+  // Only populated for INTERVIEW emails that state a concrete date/time.
+  interviewDate: string | null // YYYY-MM-DD as stated in the email
+  interviewTime: string | null // HH:MM (24h) as stated in the email, or null
 }
 
 const COMPANY_STOP_WORDS = new Set([
@@ -112,6 +115,26 @@ function buildSnippet(subject: string | null | undefined, text: string | null | 
 
 function senderDomain(fromAddress: string | null): string {
   return (fromAddress || '').toLowerCase().split('@')[1] || ''
+}
+
+/**
+ * Build a stored scheduledDate from the AI-extracted YYYY-MM-DD (+ optional
+ * HH:MM). We anchor to UTC (and to noon when no time is given) so the calendar
+ * day never rolls across a timezone boundary in the UI. Returns null when the
+ * date is missing, malformed, or implausibly far in the past/future — the
+ * caller treats null as "no confident date" and skips interview creation.
+ */
+function buildInterviewDate(interviewDate: string | null, interviewTime: string | null): Date | null {
+  if (!interviewDate || !/^\d{4}-\d{2}-\d{2}$/.test(interviewDate)) return null
+  const time = interviewTime && /^([01]?\d|2[0-3]):[0-5]\d$/.test(interviewTime) ? interviewTime : '12:00'
+  const parsed = new Date(`${interviewDate}T${time}:00Z`)
+  if (Number.isNaN(parsed.getTime())) return null
+  // Sanity window: reject dates more than ~1 year in the past or future to guard
+  // against the AI echoing a year-old date or hallucinating a far-future one.
+  const now = Date.now()
+  const ms = parsed.getTime()
+  if (ms < now - 365 * 24 * 60 * 60 * 1000 || ms > now + 365 * 24 * 60 * 60 * 1000) return null
+  return parsed
 }
 
 function isSelfOrIgnored(fromAddress: string | null, mailboxUser: string): boolean {
@@ -175,8 +198,12 @@ Respond with ONLY a JSON object, no prose:
   "company": "employer/company name, or null",
   "role": "job title if mentioned, or null",
   "summary": "one short sentence describing the email",
-  "confidence": 0-100
+  "confidence": 0-100,
+  "interviewDate": "the SCHEDULED interview date as YYYY-MM-DD, ONLY if the email states/confirms a specific calendar date for an interview or call; otherwise null. Do NOT guess, and do NOT use the email's sent date.",
+  "interviewTime": "the interview start time as HH:MM in 24-hour clock if a specific time is stated; otherwise null"
 }
+
+Today's date is ${new Date().toISOString().slice(0, 10)} (use it only to resolve a stated weekday like \"this Thursday\" into a YYYY-MM-DD; never invent a date that isn't in the email).
 
 From: ${input.fromName || ''} <${input.fromAddress || ''}>
 Subject: ${input.subject}
@@ -196,6 +223,14 @@ ${input.body.slice(0, 2000)}`
     if (!jsonMatch) return null
     const r = JSON.parse(jsonMatch[0])
     const category: AiCategory = typeof r.category === 'string' ? r.category : 'UPDATE'
+    // Accept the extracted date/time only when it is well-formed; the creation
+    // path below re-validates, but this keeps obviously-bad values out early.
+    const rawDate = typeof r.interviewDate === 'string' ? r.interviewDate.trim() : ''
+    const rawTime = typeof r.interviewTime === 'string' ? r.interviewTime.trim() : ''
+    const interviewDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : null
+    const interviewTime = /^([01]?\d|2[0-3]):[0-5]\d$/.test(rawTime)
+      ? rawTime.padStart(5, '0')
+      : null
     return {
       related: r.related === true && category !== 'NOT_RELATED',
       category,
@@ -203,6 +238,8 @@ ${input.body.slice(0, 2000)}`
       role: r.role ? String(r.role).slice(0, 160) : null,
       summary: r.summary ? String(r.summary).slice(0, 300) : null,
       confidence: typeof r.confidence === 'number' ? r.confidence : 0,
+      interviewDate,
+      interviewTime,
     }
   } catch (error) {
     console.error('[Email Sync] AI classification failed:', error instanceof Error ? error.message : error)
@@ -219,7 +256,9 @@ function keywordVerdict(subject: string, text: string): AiEmailVerdict {
   } else if (/(schedule (a |an |your )?(call|interview|time)|interview (invitation|request)|phone screen|technical screen|hiring manager|calendar invite|availability)/i.test(haystack)) {
     category = 'INTERVIEW'
   }
-  return { related: true, category, company: null, role: null, summary: null, confidence: 40 }
+  // The keyword fallback never extracts a date, so an AI outage can never
+  // auto-create an interview (mirrors the APPLICATION_RECEIVED safety gate).
+  return { related: true, category, company: null, role: null, summary: null, confidence: 40, interviewDate: null, interviewTime: null }
 }
 
 function toEnum(category: AiCategory): EmailSyncClassification {
@@ -414,14 +453,15 @@ export async function syncApplicationEmailsForUser(
         const classification = toEnum(verdict.category)
         let matched = associate(applications, verdict.company, subject, cand.fromAddress || '', text)
 
-        // Auto-create a tracked application from an application-confirmation
-        // email when that company isn't already tracked. Only fires for a clear
-        // AI "we received your application" signal with a company name; the
-        // keyword fallback never emits APPLICATION_RECEIVED, so an AI outage
-        // can't spuriously create jobs.
+        // Auto-create a tracked application from a high-signal email when that
+        // company isn't already tracked. Fires for a clear "we received your
+        // application" signal OR an interview invitation (an interview is strong
+        // proof you applied) — both with a company name. The keyword fallback
+        // never emits these categories, so an AI outage can't spuriously create
+        // jobs.
         if (
           !matched &&
-          verdict.category === 'APPLICATION_RECEIVED' &&
+          (verdict.category === 'APPLICATION_RECEIVED' || verdict.category === 'INTERVIEW') &&
           verdict.company &&
           verdict.confidence >= 60
         ) {
@@ -433,14 +473,15 @@ export async function syncApplicationEmailsForUser(
           if (dup) {
             matched = dup
           } else if (collapsed.length >= 2) {
+            const fromInterview = verdict.category === 'INTERVIEW'
             const created = await prisma.application.create({
               data: {
                 userId,
                 company: newCompany,
                 role: (verdict.role || 'Unknown role').slice(0, 160),
-                status: 'APPLIED',
+                status: fromInterview ? 'INTERVIEWING' : 'APPLIED',
                 appliedDate: cand.receivedAt,
-                notes: `Auto-added from application-confirmation email (${cand.receivedAt.toISOString().slice(0, 10)}): ${subject}`.slice(0, 500),
+                notes: `Auto-added from ${fromInterview ? 'an interview-invitation' : 'an application-confirmation'} email (${cand.receivedAt.toISOString().slice(0, 10)}): ${subject}`.slice(0, 500),
               },
               select: { id: true, company: true, role: true, status: true, notes: true, appliedDate: true },
             })
@@ -448,7 +489,7 @@ export async function syncApplicationEmailsForUser(
             companyNeedles.push(companyNeedle(created.company))
             matched = created
             summary.createdApplications++
-            console.log(`[Email Sync] Auto-created application for "${created.company}" (${created.role}) from confirmation email.`)
+            console.log(`[Email Sync] Auto-created application for "${created.company}" (${created.role}) from ${fromInterview ? 'interview' : 'confirmation'} email.`)
           }
         }
 
@@ -488,8 +529,7 @@ export async function syncApplicationEmailsForUser(
         else if (classification === 'REJECTION') summary.rejectionsDetected++
         else summary.updatesDetected++
 
-        // Record a notification activity. We do NOT change application status or
-        // create interviews automatically — the user reviews these.
+        // Record a notification activity for every job-search email.
         const target = matchedCompany || cand.fromName || cand.fromAddress || 'a company'
         await prisma.alert.create({
           data: {
@@ -498,6 +538,49 @@ export async function syncApplicationEmailsForUser(
             message: `Job-search email (${verdict.category.replace(/_/g, ' ').toLowerCase()}) from ${target}: ${subject}`.slice(0, 280),
           },
         })
+
+        // Safely auto-create an interview from a confidently-dated invitation.
+        // Guards: must be an AI INTERVIEW verdict (the keyword fallback never
+        // sets a date), tied to a tracked application, with a plausible date and
+        // confidence >= 60. Deduped against any existing interview for the same
+        // application within a ±2-day window so invite + reminder + "next steps"
+        // emails about the same interview don't pile up. Created rows are flagged
+        // autoDetected (needs the user's confirmation) and have reminderSentAt
+        // pre-stamped so the reminder cron stays silent until the user confirms.
+        if (classification === 'INTERVIEW' && matched && verdict.confidence >= 60) {
+          const scheduledDate = buildInterviewDate(verdict.interviewDate, verdict.interviewTime)
+          if (scheduledDate) {
+            const windowMs = 2 * 24 * 60 * 60 * 1000
+            const existingInterview = await prisma.interview.findFirst({
+              where: {
+                applicationId: matched.id,
+                scheduledDate: {
+                  gte: new Date(scheduledDate.getTime() - windowMs),
+                  lte: new Date(scheduledDate.getTime() + windowMs),
+                },
+              },
+              select: { id: true },
+            })
+
+            if (!existingInterview) {
+              await prisma.interview.create({
+                data: {
+                  applicationId: matched.id,
+                  scheduledDate,
+                  scheduledTime: verdict.interviewTime,
+                  interviewType: 'video',
+                  round: 1,
+                  status: 'scheduled',
+                  autoDetected: true,
+                  reminderSentAt: new Date(), // suppress reminders until confirmed
+                  preparationNotes: `Auto-detected from email (${cand.receivedAt.toISOString().slice(0, 10)}): ${subject}`.slice(0, 500),
+                },
+              })
+              summary.createdInterviews++
+              console.log(`[Email Sync] Auto-created interview for "${matched.company}" on ${scheduledDate.toISOString().slice(0, 10)} (pending user confirmation).`)
+            }
+          }
+        }
       }
     } finally {
       lock.release()
