@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+export const dynamic = 'force-dynamic'
+
 // Helper to get date string in local timezone (avoids UTC conversion issues)
 function toDateString(date: Date): string {
   const year = date.getFullYear()
@@ -15,6 +17,10 @@ function startOfDay(date: Date): Date {
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
   return d
+}
+
+function getApplicationActivityDate(app: Pick<Application, 'appliedDate' | 'createdAt' | 'updatedAt'>): Date {
+  return new Date(app.appliedDate || app.createdAt || app.updatedAt)
 }
 
 // Helper to get days between two dates
@@ -472,6 +478,7 @@ function generateApplicationsExport(applications: Application[]) {
 
 function generateSummaryStats(applications: Application[], startDate: Date | null) {
   const now = new Date()
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
   const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
@@ -482,6 +489,7 @@ function generateSummaryStats(applications: Application[], startDate: Date | nul
     DRAFT: 0, PENDING: 0, APPLIED: 0, INTERVIEWING: 0, REJECTED: 0, ARCHIVED: 0
   }
 
+  let last14DaysApps = 0
   let last7DaysApps = 0
   let last30DaysApps = 0
   let last90DaysApps = 0
@@ -490,10 +498,11 @@ function generateSummaryStats(applications: Application[], startDate: Date | nul
   applications.forEach(app => {
     statusCounts[app.status] = (statusCounts[app.status] || 0) + 1
 
-    const createdAt = new Date(app.createdAt)
-    if (createdAt >= sevenDaysAgo) last7DaysApps++
-    if (createdAt >= thirtyDaysAgo) last30DaysApps++
-    if (createdAt >= ninetyDaysAgo) last90DaysApps++
+    const activityDate = getApplicationActivityDate(app)
+    if (activityDate >= fourteenDaysAgo) last14DaysApps++
+    if (activityDate >= sevenDaysAgo) last7DaysApps++
+    if (activityDate >= thirtyDaysAgo) last30DaysApps++
+    if (activityDate >= ninetyDaysAgo) last90DaysApps++
     if (app.appliedDate) appsWithAppliedDate++
   })
 
@@ -555,6 +564,7 @@ function generateSummaryStats(applications: Application[], startDate: Date | nul
       activeWeeks
     },
     recentActivity: {
+      last14Days: last14DaysApps,
       last7Days: last7DaysApps,
       last30Days: last30DaysApps,
       last90Days: last90DaysApps
@@ -685,6 +695,7 @@ function convertToCSV(data: any, type: string): string {
     `Active Weeks,${s.averages.activeWeeks}`,
     '',
     'RECENT ACTIVITY',
+    `Last 14 Days,${s.recentActivity.last14Days}`,
     `Last 7 Days,${s.recentActivity.last7Days}`,
     `Last 30 Days,${s.recentActivity.last30Days}`,
     `Last 90 Days,${s.recentActivity.last90Days}`,

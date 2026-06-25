@@ -53,8 +53,11 @@ export default function EnhancedProfileEditor({ userId, onClose }: Props) {
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [rescoring, setRescoring] = useState(false)
+  const [rescoreMessage, setRescoreMessage] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('cv')
-  const [newSkill, setNewSkill] = useState('')
+  const [newPrimarySkill, setNewPrimarySkill] = useState('')
+  const [newSecondarySkill, setNewSecondarySkill] = useState('')
 
 const loadProfile = useCallback(async () => {
     try {
@@ -112,8 +115,23 @@ const loadProfile = useCallback(async () => {
         body: JSON.stringify({ userId, profile })
       })
       if (response.ok) {
-        alert('Profile saved successfully!')
-        onClose()
+        // Trigger background rescore with updated profile
+        try {
+          const rescoreRes = await fetch('/api/opportunities/rescore', { method: 'POST' })
+          const rescoreData = await rescoreRes.json()
+          setRescoreMessage(rescoreData.message || 'Profile saved!')
+        } catch {
+          setRescoreMessage('Profile saved! (rescore skipped)')
+        }
+        setSaving(false)
+        setRescoring(true)
+        // Auto-close after showing message
+        setTimeout(() => {
+          setRescoring(false)
+          setRescoreMessage('')
+          onClose()
+        }, 3000)
+        return
       }
     } catch (error) {
       console.error('Failed to save profile:', error)
@@ -122,13 +140,13 @@ const loadProfile = useCallback(async () => {
     }
   }
 
-  const addSkill = (category: 'primarySkills' | 'secondarySkills' | 'learningSkills') => {
-    if (newSkill.trim()) {
+  const addSkill = (category: 'primarySkills' | 'secondarySkills' | 'learningSkills', value: string, clearFn: (v: string) => void) => {
+    if (value.trim()) {
       setProfile(prev => ({
         ...prev,
-        [category]: [...prev[category], newSkill.trim()]
+        [category]: [...prev[category], value.trim()]
       }))
-      setNewSkill('')
+      clearFn('')
     }
   }
 
@@ -268,14 +286,14 @@ const loadProfile = useCallback(async () => {
                   <div className="flex gap-2 mb-2">
                     <input
                       type="text"
-                      value={newSkill}
-                      onChange={e => setNewSkill(e.target.value)}
-                      onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addSkill('primarySkills'))}
+                      value={newPrimarySkill}
+                      onChange={e => setNewPrimarySkill(e.target.value)}
+                      onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addSkill('primarySkills', newPrimarySkill, setNewPrimarySkill))}
                       className="flex-1 px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
                       placeholder="Add primary skill..."
                     />
                     <button
-                      onClick={() => addSkill('primarySkills')}
+                      onClick={() => addSkill('primarySkills', newPrimarySkill, setNewPrimarySkill)}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm whitespace-nowrap"
                     >
                       Add
@@ -301,14 +319,14 @@ const loadProfile = useCallback(async () => {
                   <div className="flex gap-2 mb-2">
                     <input
                       type="text"
-                      value={newSkill}
-                      onChange={e => setNewSkill(e.target.value)}
-                      onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addSkill('secondarySkills'))}
+                      value={newSecondarySkill}
+                      onChange={e => setNewSecondarySkill(e.target.value)}
+                      onKeyPress={e => e.key === 'Enter' && (e.preventDefault(), addSkill('secondarySkills', newSecondarySkill, setNewSecondarySkill))}
                       className="flex-1 px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
                       placeholder="Add secondary skill..."
                     />
                     <button
-                      onClick={() => addSkill('secondarySkills')}
+                      onClick={() => addSkill('secondarySkills', newSecondarySkill, setNewSecondarySkill)}
                       className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 text-sm whitespace-nowrap"
                     >
                       Add
@@ -509,12 +527,15 @@ const loadProfile = useCallback(async () => {
           >
             Cancel
           </button>
+          {rescoreMessage && (
+            <span className="text-sm text-green-600 dark:text-green-400 self-center">{rescoreMessage}</span>
+          )}
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || rescoring}
             className="w-full sm:w-auto px-4 sm:px-5 py-2.5 text-sm sm:text-base font-medium text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 rounded-lg transition-colors disabled:opacity-50"
           >
-            {saving ? 'Saving...' : 'Save Profile'}
+            {saving ? 'Saving...' : rescoring ? 'Rescoring jobs...' : 'Save & Rescore'}
           </button>
         </div>
       </div>

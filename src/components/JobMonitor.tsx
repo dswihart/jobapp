@@ -50,7 +50,7 @@ export default function JobMonitor({ userId, onComplete }: JobMonitorProps) {
         className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
       >
         <MagnifyingGlassIcon className="h-5 w-5" />
-        {loading ? 'Scanning Job Boards...' : 'Scan New Jobs'}
+        {loading ? 'Scanning...' : 'Scan Now'}
       </button>
       {result && (
         <div className="flex items-center gap-2 px-3 py-2 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg text-sm">

@@ -4,6 +4,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { createLLMClient } from '@/lib/llm-client'
 import { prisma } from './prisma'
 
 interface ExtractedSkill {
@@ -52,7 +53,7 @@ export async function extractSkillsFromJob(
   }
 
   try {
-    const anthropic = new Anthropic({ apiKey })
+    const anthropic = createLLMClient({ apiKey })
 
     const prompt = `You are an expert at analyzing job descriptions and extracting technical and soft skills.
 
@@ -94,7 +95,7 @@ ${requirements ? `**Requirements:**\n${requirements}` : ''}
 Return ONLY valid JSON, no additional text or markdown.`
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       temperature: 0.2,
       messages: [{

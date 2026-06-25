@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useToast } from './ToastProvider'
 import { Cog6ToothIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 interface SearchSettings {
@@ -8,19 +9,32 @@ interface SearchSettings {
   autoScan: boolean
   scanFrequency: string
   dailyApplicationGoal: number
+  notificationThreshold: number
+  emailSyncEnabled: boolean
+  emailSyncLookbackDays: number
+  lastEmailSyncAt?: string | null
+  lastEmailSyncError?: string | null
 }
 
-export default function JobSearchSettings({ userId, onSettingsSaved }: { userId: string; onSettingsSaved?: () => void }) {
-  const [isOpen, setIsOpen] = useState(false)
+export default function JobSearchSettings({ userId, onSettingsSaved, defaultOpen }: { userId: string; onSettingsSaved?: () => void; defaultOpen?: boolean }) {
+  const toast = useToast()
+  const [isOpen, setIsOpen] = useState(defaultOpen ?? false)
   const [settings, setSettings] = useState<SearchSettings>({
     minFitScore: 40,
     maxJobAgeDays: 7,
     autoScan: false,
     scanFrequency: 'daily',
-    dailyApplicationGoal: 6
+    dailyApplicationGoal: 6,
+    notificationThreshold: 80,
+    emailSyncEnabled: false,
+    emailSyncLookbackDays: 14,
+    lastEmailSyncAt: null,
+    lastEmailSyncError: null,
   })
   const [saved, setSaved] = useState(false)
-  
+  const [syncingEmail, setSyncingEmail] = useState(false)
+  const [emailSyncMessage, setEmailSyncMessage] = useState<string | null>(null)
+
 
   const saveSettings = async () => {
     try {
@@ -40,11 +54,44 @@ export default function JobSearchSettings({ userId, onSettingsSaved }: { userId:
         }, 1000)
       } else {
         console.error('Failed to save settings:', data.error)
-        alert('Failed to save settings. Please try again.')
+        toast.error('Failed to save settings. Please try again.')
       }
     } catch (error) {
       console.error('Error saving settings:', error)
-      alert('Error saving settings. Please try again.')
+      toast.error('Error saving settings. Please try again.')
+    }
+  }
+
+  const syncEmailNow = async () => {
+    setSyncingEmail(true)
+    setEmailSyncMessage(null)
+
+    try {
+      const response = await fetch('/api/email-sync', {
+        method: 'POST',
+      })
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        setEmailSyncMessage(data.details || data.error || 'Email sync failed.')
+        return
+      }
+
+      const summary = data.summary
+      setEmailSyncMessage(
+        `Synced ${summary.imported} new emails. Matched ${summary.matched}, interviews ${summary.interviewsDetected}, rejections ${summary.rejectionsDetected}.`
+      )
+
+      setSettings(current => ({
+        ...current,
+        lastEmailSyncAt: new Date().toISOString(),
+        lastEmailSyncError: null,
+      }))
+    } catch (error) {
+      console.error('Error syncing Gmail:', error)
+      setEmailSyncMessage('Email sync failed.')
+    } finally {
+      setSyncingEmail(false)
     }
   }
 
@@ -55,7 +102,10 @@ export default function JobSearchSettings({ userId, onSettingsSaved }: { userId:
         const response = await fetch(`/api/settings?userId=${userId}`)
         const data = await response.json()
         if (data.success) {
-          setSettings(data.settings)
+          setSettings({
+            ...data.settings,
+            notificationThreshold: data.settings?.notificationThreshold ?? 80,
+          })
         }
       } catch (error) {
         console.error('Error loading settings:', error)
@@ -114,6 +164,24 @@ export default function JobSearchSettings({ userId, onSettingsSaved }: { userId:
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Notification Threshold: {settings.notificationThreshold === 0 ? 'Off' : `${settings.notificationThreshold}%`}
+                </label>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={settings.notificationThreshold}
+                  onChange={(e) => setSettings({ ...settings, notificationThreshold: Number(e.target.value) })}
+                  className="w-full"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Get notified when a job scores above this threshold. Set to 0 to disable.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium mb-2">
                   Job Posting Age
                 </label>
@@ -164,6 +232,66 @@ export default function JobSearchSettings({ userId, onSettingsSaved }: { userId:
                   </div>
                 )}
               </div>
+
+              <div className="border-t border-gray-200 dark:border-neutral-700 pt-6 space-y-4">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.emailSyncEnabled}
+                    onChange={(e) => setSettings({ ...settings, emailSyncEnabled: e.target.checked })}
+                    className="h-5 w-5"
+                  />
+                  <div>
+                    <div className="font-medium">Enable Gmail Sync</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Pull inbox replies back into applications and detect interview or rejection emails.
+                    </div>
+                  </div>
+                </label>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Email Sync Lookback Window
+                  </label>
+                  <select
+                    value={settings.emailSyncLookbackDays}
+                    onChange={(e) => setSettings({ ...settings, emailSyncLookbackDays: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border rounded-lg dark:bg-neutral-700 dark:border-neutral-600"
+                  >
+                    <option value={7}>Last 7 days</option>
+                    <option value={14}>Last 14 days</option>
+                    <option value={30}>Last 30 days</option>
+                  </select>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 dark:border-neutral-700 p-4 bg-gray-50 dark:bg-neutral-900/40">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div className="text-sm">
+                      <div className="font-medium text-gray-800 dark:text-gray-200">Manual Gmail Sync</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Last sync: {settings.lastEmailSyncAt ? new Date(settings.lastEmailSyncAt).toLocaleString() : 'Never'}
+                      </div>
+                    </div>
+                    <button
+                      onClick={syncEmailNow}
+                      disabled={syncingEmail}
+                      className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white"
+                    >
+                      {syncingEmail ? 'Syncing...' : 'Sync Now'}
+                    </button>
+                  </div>
+                  {settings.lastEmailSyncError && (
+                    <div className="mt-3 text-xs text-red-600 dark:text-red-400">
+                      Last error: {settings.lastEmailSyncError}
+                    </div>
+                  )}
+                  {emailSyncMessage && (
+                    <div className="mt-3 text-xs text-blue-700 dark:text-blue-300">
+                      {emailSyncMessage}
+                    </div>
+                  )}
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium mb-2">
                   Daily Application Goal: {settings.dailyApplicationGoal} applications/day
@@ -190,6 +318,8 @@ export default function JobSearchSettings({ userId, onSettingsSaved }: { userId:
                   <li>• Minimum fit score: <strong>{settings.minFitScore}%</strong></li>
                   <li>• Jobs from last <strong>{settings.maxJobAgeDays} days</strong></li>
                   <li>• Auto-scan: <strong>{settings.autoScan ? `Yes (${settings.scanFrequency})` : 'No'}</strong></li>
+                  <li>• Notifications: <strong>{settings.notificationThreshold === 0 ? 'Off' : `Jobs above ${settings.notificationThreshold}%`}</strong></li>
+                  <li>• Gmail sync: <strong>{settings.emailSyncEnabled ? `Yes (${settings.emailSyncLookbackDays} day window)` : 'No'}</strong></li>
                 </ul>
               </div>
 

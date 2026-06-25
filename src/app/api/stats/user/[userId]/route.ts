@@ -1,22 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getDailyBuckets } from '@/lib/stats-dates'
+
+function isPublicDanielAccount(user: { email?: string | null; name?: string | null }) {
+  const email = (user.email || '').toLowerCase()
+  const name = (user.name || '').toLowerCase()
+
+  return (
+    email.includes('dswihart') ||
+    email.includes('swihart') ||
+    name.includes('daniel swihart')
+  )
+}
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const { userId } = params
+    const { userId } = await params
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
         name: true,
-        email: true
+        email: true,
       }
     })
 
     if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    if (!isPublicDanielAccount(user)) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
@@ -39,67 +55,47 @@ export async function GET(
 
     const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    // Bucket by the user's local (Europe/Madrid) calendar days so "today" shows
+    // even while the server's UTC day still lags behind. 16-day window.
     const dailyStats = []
-    const today = new Date()
-
-    // Get last 30 days
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)
-      date.setHours(0, 0, 0, 0)
-
-      const nextDate = new Date(date)
-      nextDate.setDate(nextDate.getDate() + 1)
-
+    for (const bucket of getDailyBuckets(16)) {
+      // Count strictly by appliedDate (single source of truth shared with the
+      // post-login /stats page). Applications with no appliedDate are not counted.
       const count = await prisma.application.count({
         where: {
           userId,
-          AND: {
-            OR: [
-              {
-                appliedDate: {
-                  gte: date,
-                  lt: nextDate
-                }
-              },
-              {
-                AND: [
-                  { appliedDate: null },
-                  {
-                    updatedAt: {
-                      gte: date,
-                      lt: nextDate
-                    }
-                  }
-                ]
-              }
-            ]
+          appliedDate: {
+            gte: bucket.start,
+            lt: bucket.end
           }
         }
       })
 
-      const dayName = dayLabels[date.getDay()]
-      const monthName = monthNames[date.getMonth()]
-      const dayNum = date.getDate()
+      // Label parts from the bucket's calendar date (UTC-read to avoid re-shifting).
+      const labelDate = new Date(bucket.dateStr)
+      const dayName = dayLabels[labelDate.getUTCDay()]
+      const monthName = monthNames[labelDate.getUTCMonth()]
+      const dayNum = labelDate.getUTCDate()
 
       dailyStats.push({
-        date: date.toISOString().split('T')[0],
-        count: count,
+        date: bucket.dateStr,
+        count,
         dayLabel: dayName + ', ' + monthName + ' ' + dayNum
       })
     }
 
     return NextResponse.json({
       userId,
-      userName: user.name || user.email?.split('@')[0] || 'User',
+      userName: user.name || 'User',
       dailyGoal: 5,
       total,
       byStatus: {
         DRAFT: byStatus.DRAFT || 0,
+        PENDING: byStatus.PENDING || 0,
         APPLIED: byStatus.APPLIED || 0,
         INTERVIEWING: byStatus.INTERVIEWING || 0,
         REJECTED: byStatus.REJECTED || 0,
-        OFFER: byStatus.OFFER || 0,
-        ACCEPTED: byStatus.ACCEPTED || 0
+        ARCHIVED: byStatus.ARCHIVED || 0
       },
       dailyStats
     })

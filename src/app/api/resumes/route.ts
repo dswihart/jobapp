@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { writeFile, mkdir, unlink } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { sanitizeFilename, safePathJoin, validateUrlPath } from '@/lib/safe-path'
 
-const prisma = new PrismaClient()
 
 // GET /api/resumes - List all resumes for the current user
 export async function GET(request: NextRequest) {

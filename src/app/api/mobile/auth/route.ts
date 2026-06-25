@@ -20,11 +20,17 @@ export async function POST(request: Request) {
       password,
       redirect: false,
     })
+    const response = NextResponse.json({ success: true })
 
-    // Note: signIn usually throws if it fails or redirects if it succeeds.
-    // With redirect: false, it might return undefined on success or throw on error.
-    
-    return NextResponse.json({ success: true })
+    if (result instanceof Response) {
+      result.headers.forEach((value, key) => {
+        if (key.toLowerCase() === 'set-cookie') {
+          response.headers.append(key, value)
+        }
+      })
+    }
+
+    return response
   } catch (error) {
     // If it is a redirect error (which happens on success sometimes), we consider it success
     if (error instanceof Error && error.message.includes('NEXT_REDIRECT')) {

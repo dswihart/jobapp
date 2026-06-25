@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLLMClient } from '@/lib/llm-client'
+import { requireAuthenticatedUser } from '@/lib/api-auth'
 import Anthropic from '@anthropic-ai/sdk'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAuthenticatedUser()
+  if (authResult.response) return authResult.response
+
   try {
     const searchParams = request.nextUrl.searchParams
     const userId = searchParams.get('userId')
@@ -106,7 +111,7 @@ Progress today: ${todayCount >= dailyGoal ? 'Goal achieved!' : `${dailyGoal - to
     }
 
     // Call Claude API for personalized message
-    const anthropic = new Anthropic({ apiKey })
+    const anthropic = createLLMClient({ apiKey })
 
     const message = await anthropic.messages.create({
       model: 'claude-sonnet-4-5',

@@ -23,6 +23,9 @@ export default function CoverLettersPage() {
   const [coverLetter, setCoverLetter] = useState<string | null>(null)
   const [selectedApp, setSelectedApp] = useState<Application | null>(null)
   const [copied, setCopied] = useState(false)
+  const [history, setHistory] = useState<Array<{ id: string; name: string; content: string | null; createdAt: string }>>([])
+  const [expandedHistory, setExpandedHistory] = useState<string | null>(null)
+  const [historyCopied, setHistoryCopied] = useState<string | null>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -35,12 +38,16 @@ export default function CoverLettersPage() {
   const loadApplications = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/applications')
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+      const [appsRes, histRes] = await Promise.all([
+        fetch('/api/applications'),
+        fetch('/api/cover-letter'),
+      ])
+      const appsData = await appsRes.json()
+      setApplications(Array.isArray(appsData) ? appsData : [])
+      if (histRes.ok) {
+        const histData = await histRes.json()
+        setHistory(Array.isArray(histData) ? histData : (histData.coverLetters ?? []))
       }
-      const data = await response.json()
-      setApplications(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Failed to load applications:', error)
       setApplications([])
@@ -253,6 +260,59 @@ export default function CoverLettersPage() {
           </div>
         </div>
       </div>
+
+      {/* Cover Letter History */}
+      {history.length > 0 && (
+        <div className="max-w-4xl mx-auto mt-10 px-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Previously Generated</h2>
+          <div className="space-y-3">
+            {history.map(item => (
+              <div key={item.id} className="border border-gray-200 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800">
+                <div
+                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                  onClick={() => setExpandedHistory(expandedHistory === item.id ? null : item.id)}
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{item.name}</p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {item.content && (
+                      <button
+                        onClick={async e => {
+                          e.stopPropagation()
+                          await navigator.clipboard.writeText(item.content!)
+                          setHistoryCopied(item.id)
+                          setTimeout(() => setHistoryCopied(null), 2000)
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1"
+                      >
+                        {historyCopied === item.id ? <CheckIcon className="w-3.5 h-3.5" /> : <ClipboardDocumentIcon className="w-3.5 h-3.5" />}
+                        {historyCopied === item.id ? 'Copied' : 'Copy'}
+                      </button>
+                    )}
+                    <span className="text-gray-400 text-xs">{expandedHistory === item.id ? '▲' : '▼'}</span>
+                  </div>
+                </div>
+                {expandedHistory === item.id && item.content && (
+                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3">
+                    <pre className="whitespace-pre-wrap font-sans text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                      {item.content}
+                    </pre>
+                  </div>
+                )}
+                {expandedHistory === item.id && !item.content && (
+                  <div className="px-4 pb-4 border-t border-gray-100 dark:border-gray-700 pt-3 text-sm text-gray-400">
+                    No text content saved for this cover letter.
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

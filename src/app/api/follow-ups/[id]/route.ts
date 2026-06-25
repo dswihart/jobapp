@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-
-const prisma = new PrismaClient()
 
 // GET - Fetch a single follow-up
 export async function GET(
@@ -16,7 +14,9 @@ export async function GET(
     }
 
     const { id } = await params
-    const followUp = await prisma.followUp.findUnique({
+    // findFirst (not findUnique) so the non-unique userId acts as an ownership
+    // filter — findUnique rejects non-unique args and 500s on every call.
+    const followUp = await prisma.followUp.findFirst({
       where: {
         id,
         userId: session.user.id

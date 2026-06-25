@@ -1,16 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { userId, opportunityId, status = 'APPLIED' } = body
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    const userId = session.user.id
 
-    if (!userId || !opportunityId) {
+    const body = await request.json()
+    const { opportunityId, status = 'APPLIED' } = body
+
+    if (!opportunityId) {
       return NextResponse.json(
-        { error: 'User ID and Opportunity ID are required' },
+        { error: 'Opportunity ID is required' },
         { status: 400 }
       )
     }
@@ -19,7 +24,7 @@ export async function POST(request: NextRequest) {
       where: { id: opportunityId }
     })
 
-    if (!opportunity) {
+    if (!opportunity || opportunity.userId !== userId) {
       return NextResponse.json(
         { error: 'Job opportunity not found' },
         { status: 404 }
@@ -40,55 +45,46 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Build comprehensive notes with all job details
     const notesContent = []
 
-    // Add status header
     if (status === 'APPLIED') {
-      notesContent.push(`✓ Applied via Job Tracker`)
+      notesContent.push('Applied via Job Tracker')
     } else {
-      notesContent.push(`📝 Draft from Job Tracker`)
+      notesContent.push('Draft from Job Tracker')
     }
 
-    // Add source and fit score
     notesContent.push(`Source: ${opportunity.source}`)
     if (opportunity.fitScore) {
       notesContent.push(`Fit Score: ${opportunity.fitScore}%`)
     }
-    notesContent.push('') // Empty line
+    notesContent.push('')
 
-    // Add job description
     if (opportunity.description) {
       notesContent.push('JOB DESCRIPTION:')
       notesContent.push(opportunity.description)
-      notesContent.push('') // Empty line
+      notesContent.push('')
     }
 
-    // Add requirements
     if (opportunity.requirements) {
       notesContent.push('REQUIREMENTS:')
       notesContent.push(opportunity.requirements)
-      notesContent.push('') // Empty line
+      notesContent.push('')
     }
 
-    // Add location if available
     if (opportunity.location) {
-      notesContent.push(`📍 Location: ${opportunity.location}`)
+      notesContent.push(`Location: ${opportunity.location}`)
     }
 
-    // Add salary if available
     if (opportunity.salary) {
-      notesContent.push(`💰 Salary: ${opportunity.salary}`)
+      notesContent.push(`Salary: ${opportunity.salary}`)
     }
 
-    // Add job URL
     if (opportunity.jobUrl) {
-      notesContent.push(`🔗 Job URL: ${opportunity.jobUrl}`)
+      notesContent.push(`Job URL: ${opportunity.jobUrl}`)
     }
 
-    // Add posted date if available
     if (opportunity.postedDate) {
-      notesContent.push(`📅 Posted: ${new Date(opportunity.postedDate).toLocaleDateString()}`)
+      notesContent.push(`Posted: ${new Date(opportunity.postedDate).toLocaleDateString()}`)
     }
 
     const notes = notesContent.join('\n')
@@ -98,14 +94,12 @@ export async function POST(request: NextRequest) {
         company: opportunity.company,
         role: opportunity.title,
         jobUrl: opportunity.jobUrl,
-        status: status,
+        status,
         appliedDate: status === 'APPLIED' ? new Date() : null,
-        notes: notes,
+        notes,
         userId
       }
     })
-
-    console.log(`[Applications API] Created ${status} application for ${opportunity.title} at ${opportunity.company}`)
 
     return NextResponse.json({
       success: true,

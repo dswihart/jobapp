@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAdminUser } from '@/lib/api-auth'
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
-  try {
-    const { userId } = params
+  const authResult = await requireAdminUser()
+  if (authResult.response) {
+    return authResult.response
+  }
 
-    // Delete the user
+  try {
+    const { userId } = await params
+
     const deletedUser = await prisma.user.delete({
       where: { id: userId }
     })

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { readFile } from 'fs/promises'
 import path from 'path'
 import mammoth from 'mammoth'
 import { validateUrlPath, safePathJoin } from '@/lib/safe-path'
 
-const prisma = new PrismaClient()
 
 export async function GET(
   request: NextRequest,

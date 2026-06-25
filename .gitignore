@@ -56,3 +56,8 @@ public/uploads/
 
 # Config
 .config/
+
+# build cache (huge Chrome binaries) / runtime user uploads (resume PII) / working backups — never commit
+.cache/
+/public/uploads/
+*-backup-*/

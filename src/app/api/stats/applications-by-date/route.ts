@@ -2,13 +2,42 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
+function isPublicDanielAccount(user: { email?: string | null; name?: string | null }) {
+  const email = (user.email || '').toLowerCase()
+  const name = (user.name || '').toLowerCase()
+
+  return (
+    email.includes('dswihart') ||
+    email.includes('swihart') ||
+    name.includes('daniel swihart')
+  )
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
+    const searchParams = request.nextUrl.searchParams
+    const fallbackUserId = searchParams.get('userId')
+    const userId = session?.user?.id || fallbackUserId
+    const days = Math.max(1, Math.min(30, Number(searchParams.get('days') || '7')))
+
+    if (!session?.user?.id && userId) {
+      const publicUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          email: true,
+          name: true,
+        },
+      })
+
+      if (!publicUser || !isPublicDanielAccount(publicUser)) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      }
+    }
 
     // Get applications - either for specific user (if authenticated) or all users (if public)
     const applications = await prisma.application.findMany({
-      where: session?.user?.id ? { userId: session.user.id } : {},
+      where: userId ? { userId } : {},
       select: {
         createdAt: true,
         appliedDate: true,
@@ -53,11 +82,11 @@ export async function GET(request: NextRequest) {
       })
     }))
 
-    // Get last 30 days statistics
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    const daysAgo = new Date()
+    daysAgo.setDate(daysAgo.getDate() - (days - 1))
+    daysAgo.setHours(0, 0, 0, 0)
 
-    const recentData = data.filter(item => new Date(item.date) >= thirtyDaysAgo)
+    const recentData = data.filter(item => new Date(item.date) >= daysAgo)
 
     // Calculate totals
     const totalAdded = applications.length
@@ -68,9 +97,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       allTime: data,
-      last30Days: recentData,
+      recentDays: recentData,
       total: totalAdded,
-      totalApplied: totalApplied
+      totalApplied: totalApplied,
+      rangeDays: days,
     })
   } catch (error) {
     console.error('Applications by date error:', error)

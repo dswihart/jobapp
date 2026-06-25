@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { unlink, readdir, readFile } from 'fs/promises'
+import { requireAdminUser } from '@/lib/api-auth'
 import path from 'path'
 import { reloadSources } from '@/lib/sources'
 
 export async function POST(request: Request) {
+  const authResult = await requireAdminUser()
+  if (authResult.response) return authResult.response
+
   try {
     const { sourceName } = await request.json()
 

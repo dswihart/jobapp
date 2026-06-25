@@ -3,6 +3,7 @@
  * Monitors job boards for new opportunities
  */
 
+import { createHash } from 'crypto'
 import { prisma } from './prisma'
 import { analyzeJobFitEnhanced } from './ai-service'
 import { calculateRejectionPenalty } from './pattern-learning-service'
@@ -10,7 +11,31 @@ import { calculateRejectionPenalty } from './pattern-learning-service'
 
 import { fetchFromUserSources } from './user-sources-fetcher'
 import { fetchFromTargetCompanies } from './sources/target-companies-fetcher'
+import { fetchFromExaDiscovery } from './sources/exa-discovery'
 import { extractSkillsFromJob, saveSkillsToDatabase } from './skill-service'
+
+/**
+ * Paywalled job boards — the posting may be real, but the user cannot actually
+ * view or apply without a paid membership, so these are noise. Drop any job
+ * whose URL points at one of these hosts, regardless of which source surfaced
+ * it (user feeds, target companies, or Exa). Keep this list NARROW: it is
+ * applied globally, unlike the Exa-only AGGREGATOR_HOST_DENYLIST (which also
+ * lists free boards the user pulls directly, e.g. remoteok/remotive).
+ */
+const PAYWALLED_HOST_DENYLIST = [
+  'workingnomads', // Working Nomads — full listings gated behind paid plan
+  'flexjobs',      // FlexJobs — subscription required to see/apply
+]
+
+function isPaywalledHost(url: string | undefined): boolean {
+  if (!url) return false
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase()
+    return PAYWALLED_HOST_DENYLIST.some(d => host === d || host.includes(d))
+  } catch {
+    return false
+  }
+}
 
 /**
  * DEPRECATED: Location filtering now handled by AI based on user preferences
@@ -76,7 +101,25 @@ interface RemotiveJob {
 
 export async function monitorJobBoards(userId: string): Promise<number> {
   const user = await prisma.user.findUnique({
-    where: { id: userId }
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      skills: true,
+      primarySkills: true,
+      secondarySkills: true,
+      jobTitles: true,
+      experience: true,
+      yearsOfExperience: true,
+      seniorityLevel: true,
+      workPreference: true,
+      summary: true,
+      resumeUrl: true,
+      minFitScore: true,
+      maxJobAgeDays: true,
+      notificationThreshold: true,
+      preferredCountries: true,
+    }
   })
 
   if (!user) {
@@ -85,6 +128,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
 
   const minFitScore = user.minFitScore ?? 40
   const maxJobAgeDays = user.maxJobAgeDays ?? 7
+  const notificationThreshold = user.notificationThreshold ?? 80
 
   console.log(`[Job Monitor] Starting scan for user ${userId}`)
   console.log(`[Job Monitor] User Profile:`, {
@@ -105,6 +149,17 @@ export async function monitorJobBoards(userId: string): Promise<number> {
 
   let addedCount = 0
 
+  const seenTitleCompany = new Set<string>()
+  const lowScoreCache = new Set<string>() // cache jobs that scored below threshold to avoid re-scoring from other sources
+
+  // Hard cap on AI scoring calls per scan — bounds worst-case API spend when a
+  // source floods the scan with new listings (June 2026 Exa incident).
+  // Raised 150 -> 400 (2026-06-21) so newly-added target companies, scanned late
+  // in the pipeline, get scored in a single pass instead of being deferred.
+  const MAX_AI_CALLS_PER_SCAN = 400
+  let aiCallCount = 0
+  let aiCapSkipped = 0
+
   for (const job of allJobs) {
     try {
       // Check if job is blocked (previously rejected)
@@ -116,6 +171,18 @@ export async function monitorJobBoards(userId: string): Promise<number> {
 
       if (blocked.length > 0) {
         console.log(`[Job Monitor] Skipping blocked job: ${job.title}`)
+        continue
+      }
+
+      // In-memory dedup within this scan (prevents scoring same job from multiple sources)
+      const titleCompanyKey = (job.title + '|||' + job.company).toLowerCase()
+      if (seenTitleCompany.has(titleCompanyKey)) {
+        continue
+      }
+      seenTitleCompany.add(titleCompanyKey)
+
+      // Skip if this title+company already scored below threshold in this scan
+      if (lowScoreCache.has(titleCompanyKey)) {
         continue
       }
 
@@ -154,6 +221,67 @@ export async function monitorJobBoards(userId: string): Promise<number> {
         }
       }
 
+      // === PRE-FILTER: cheap relevance check before expensive AI call ===
+      const jobText = (job.title + " " + job.description + " " + (job.requirements || "")).toLowerCase()
+      const jobTitleLower = job.title.toLowerCase()
+      const userSkills = [...((user.primarySkills || user.skills) as string[]), ...((user.secondarySkills || []) as string[])]
+      const userTitles = ((user.jobTitles || []) as string[])
+
+      // 1. Check if any full skill string appears in job text
+      const skillHit = userSkills.some(s => jobText.includes(s.toLowerCase()))
+
+      // 2. Check if job title matches any preferred title keyword
+      const titleHit = userTitles.some(t => {
+        const words = t.toLowerCase().split(" ").filter(w => w.length > 3 && !["senior","junior","lead","principal","engineer","analyst","manager","specialist","developer","consultant"].includes(w))
+        return words.some(w => jobTitleLower.includes(w))
+      })
+
+      // 3. Check job title/text against domain keywords extracted from skills
+      const domainKeywords = userSkills.flatMap(s => {
+        const lower = s.toLowerCase()
+        // Keep single-word skills as-is (e.g. "python", "splunk", "devsecops")
+        if (!lower.includes(" ")) return lower.length > 3 ? [lower] : []
+        // Split multi-word skills, keep domain-specific words
+        const generic = ["management","engineering","testing","architecture","analytics","operations","response","detection","integration","integrations","design","strategy","development","solutions","network","systems","services","platform","data","lead","team","api","cli"]
+        return lower.split(" ").filter(w => w.length > 3 && !generic.includes(w))
+      })
+      const uniqueDomainKeywords = [...new Set(domainKeywords)]
+      const domainHit = uniqueDomainKeywords.some(kw => jobTitleLower.includes(kw))
+
+      // Skip AI call if none of the three checks pass
+      if (!skillHit && !titleHit && !domainHit) {
+        console.log(`[Job Monitor] Pre-filter SKIP: ${job.title}`)
+        continue
+      }
+
+      // === CACHE CHECK: skip jobs already scored in last 7 days ===
+      const jobHash = createHash('md5').update(job.title + '|||' + job.company).digest('hex')
+      const cached = await prisma.$queryRaw<Array<{ score: number }>>`
+        SELECT score FROM scored_jobs_cache
+        WHERE user_id = ${userId} AND job_hash = ${jobHash} AND scored_at > NOW() - INTERVAL '7 days'
+        LIMIT 1
+      `
+      if (cached.length > 0) {
+        console.log(`[Job Monitor] Cache HIT: ${job.title} (cached score: ${cached[0].score})`)
+        // Refresh scored_at so listings that keep appearing in scan results stay
+        // cached instead of being re-scored every time the TTL expires
+        await prisma.$executeRaw`
+          UPDATE scored_jobs_cache SET scored_at = NOW()
+          WHERE user_id = ${userId} AND job_hash = ${jobHash}
+        `.catch((e: unknown) => console.error('[Job Monitor] Cache refresh error:', e))
+        if (cached[0].score < minFitScore) continue
+        // If cached score was above threshold, the job was already added previously — skip
+        continue
+      }
+
+      if (aiCallCount >= MAX_AI_CALLS_PER_SCAN) {
+        if (aiCapSkipped === 0) {
+          console.warn(`[Job Monitor] AI call cap (${MAX_AI_CALLS_PER_SCAN}) reached — deferring remaining new jobs to a later scan`)
+        }
+        aiCapSkipped++
+        continue
+      }
+
       // Build enhanced user profile for better AI matching
       const enhancedProfile = {
         primarySkills: (user.primarySkills || user.skills) as string[],
@@ -175,20 +303,36 @@ export async function monitorJobBoards(userId: string): Promise<number> {
         salaryExpectation: user.salaryExpectation || undefined
       }
 
-      // Use enhanced AI matching
-      const fitScore = await analyzeJobFitEnhanced(
-        enhancedProfile,
-        {
-          title: job.title,
-          company: job.company,
-          description: job.description,
-          requirements: job.requirements || '',
-          location: job.location,
-          salary: job.salary
-        },
-        userId
-      )
+      // Use enhanced AI matching — Haiku first (cheap), Sonnet for borderline
+      const jobDesc = {
+        title: job.title,
+        company: job.company,
+        description: job.description,
+        requirements: job.requirements || '',
+        location: job.location,
+        salary: job.salary
+      }
+      let fitScore = await analyzeJobFitEnhanced(enhancedProfile, jobDesc, userId, undefined, minFitScore)
+      aiCallCount++
 
+      // Skip jobs the AI couldn't score (keyword fallback after an API failure,
+      // e.g. credit exhaustion): don't cache or add them with junk scores —
+      // they'll be re-encountered and properly scored on a later scan
+      if ((fitScore._claudeScore ?? null) === null && (fitScore._miniMaxScore ?? null) === null) {
+        console.log(`[Job Monitor] AI scoring unavailable — deferring job to a later scan: ${job.title}`)
+        continue
+      }
+
+      // Re-score borderline jobs (45-60%) with Sonnet for better accuracy
+      if (fitScore.overall >= 45 && fitScore.overall <= 60) {
+        console.log(`[Job Monitor] Borderline ${fitScore.overall}% — re-scoring with Sonnet: ${job.title}`)
+        const sonnetScore = await analyzeJobFitEnhanced(enhancedProfile, jobDesc, userId, 'claude-sonnet-4-6', minFitScore)
+        aiCallCount++
+        // Keep the Haiku result if the Sonnet call fell back to keyword scoring
+        if ((sonnetScore._claudeScore ?? null) !== null || (sonnetScore._miniMaxScore ?? null) !== null) {
+          fitScore = sonnetScore
+        }
+      }
 
       // Apply learned rejection patterns penalty
       const rejectionPenalty = await calculateRejectionPenalty(userId, {
@@ -203,7 +347,21 @@ export async function monitorJobBoards(userId: string): Promise<number> {
 
       const adjustedScore = Math.max(0, fitScore.overall - rejectionPenalty)
 
+      // Cache the score so we skip this job in future scans
+      const claudeScore = fitScore._claudeScore ?? null
+      const miniMaxScore = fitScore._miniMaxScore ?? null
+      await prisma.$executeRaw`
+        INSERT INTO scored_jobs_cache (user_id, job_hash, score, claude_score, minimax_score)
+        VALUES (${userId}, ${jobHash}, ${adjustedScore}, ${claudeScore}, ${miniMaxScore})
+        ON CONFLICT (user_id, job_hash) DO UPDATE
+          SET score = ${adjustedScore}, claude_score = ${claudeScore}, minimax_score = ${miniMaxScore}, scored_at = NOW()
+      `.catch((e: unknown) => console.error('[Job Monitor] Cache write error:', e))
+
       console.log(`[Job Monitor] ${job.title} at ${job.company}: ${fitScore.overall}% fit (title: ${fitScore.titleMatch}%, skill: ${fitScore.skillMatch}%, exp: ${fitScore.experienceMatch}%)${rejectionPenalty > 0 ? ` - PENALTY: -${rejectionPenalty}% = ${adjustedScore}%` : ''}`)
+
+      if (adjustedScore < minFitScore) {
+        lowScoreCache.add(titleCompanyKey)
+      }
 
       if (adjustedScore >= minFitScore) {
         const opportunity = await prisma.jobOpportunity.create({
@@ -218,6 +376,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
             source: job.source || 'Unknown',
             postedDate: job.postedDate,
             fitScore: adjustedScore,
+            scoreBreakdown: fitScore.scoreBreakdown,
             userId
           }
         })
@@ -231,10 +390,31 @@ export async function monitorJobBoards(userId: string): Promise<number> {
           }
         })
 
-        // Extract and save skills to database asynchronously
-        extractSkillsFromJob(job.description, job.title, job.company, job.requirements)
-          .then(result => saveSkillsToDatabase(result, job.jobUrl))
-          .catch(err => console.error("[Job Monitor] Skill extraction error:", err))
+        if (notificationThreshold > 0 && adjustedScore >= notificationThreshold) {
+          await prisma.alert.create({
+            data: {
+              message: `Strong match (${adjustedScore}%): ${job.title} at ${job.company}`,
+              type: 'HIGH_FIT_SCORE',
+              userId,
+              opportunityId: opportunity.id
+            }
+          })
+        }
+
+        // Save skills extracted by the fit scoring AI call (merged - no separate API call needed)
+        if (fitScore.extractedJobSkills && fitScore.extractedJobSkills.length > 0) {
+          const skillResult = {
+            skills: fitScore.extractedJobSkills.map((s: any) => ({
+              name: s.name,
+              category: s.category || "Tool",
+              isRequired: s.isRequired ?? true,
+            })),
+            jobTitle: job.title,
+            company: job.company,
+          }
+          saveSkillsToDatabase(skillResult, job.jobUrl)
+            .catch(err => console.error("[Job Monitor] Skill save error:", err))
+        }
         console.log(`[Job Monitor] Added job: ${job.title} (${adjustedScore}% fit)`)
         addedCount++
       }
@@ -243,7 +423,7 @@ export async function monitorJobBoards(userId: string): Promise<number> {
     }
   }
 
-  console.log(`[Job Monitor] Scan complete. Added ${addedCount} new jobs.`)
+  console.log(`[Job Monitor] Scan complete. Added ${addedCount} new jobs.${aiCapSkipped > 0 ? ` AI call cap hit — ${aiCapSkipped} new jobs deferred.` : ''}`)
   return addedCount
 }
 async function fetchFromAllSources(userId: string): Promise<JobPosting[]> {
@@ -269,15 +449,32 @@ async function fetchFromAllSources(userId: string): Promise<JobPosting[]> {
     console.error('[Job Aggregator] Error fetching target companies:', error)
   }
 
+  // Fetch from Exa whole-web discovery (profile + GOOD_MATCH calibrated neural search).
+  try {
+    const exaJobs = await fetchFromExaDiscovery(userId)
+    console.log('[Job Aggregator] Found ' + exaJobs.length + ' jobs from Exa discovery')
+    allJobs.push(...exaJobs)
+  } catch (error) {
+    console.error('[Job Aggregator] Error fetching Exa discovery:', error)
+  }
+
   // Remove duplicates by jobUrl
   const uniqueJobs = Array.from(
     new Map(allJobs.map(job => [job.jobUrl, job])).values()
   )
 
+  // Drop paywalled job boards (e.g. Working Nomads, FlexJobs) — the user can't
+  // access these without paying, so they should never reach the DB.
+  const accessibleJobs = uniqueJobs.filter(job => !isPaywalledHost(job.jobUrl))
+  const paywalledDropped = uniqueJobs.length - accessibleJobs.length
+
   console.log('[Job Aggregator] Summary:')
   console.log('  - Total: ' + allJobs.length + ' jobs (' + uniqueJobs.length + ' unique)')
+  if (paywalledDropped > 0) {
+    console.log('  - Dropped ' + paywalledDropped + ' paywalled-board jobs (Working Nomads / FlexJobs)')
+  }
 
-  return uniqueJobs
+  return accessibleJobs
 }
 
 export async function getUnreadAlerts(userId: string) {

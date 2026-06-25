@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth'
 export async function GET(request: NextRequest) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -14,12 +14,10 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search')?.toLowerCase().trim()
     const status = searchParams.get('status')
 
-    // Build the where clause
     const whereClause: Record<string, unknown> = {
       userId: session.user.id
     }
 
-    // Add status filter if specified
     if (status && status !== 'ALL') {
       whereClause.status = status
     }
@@ -30,17 +28,15 @@ export async function GET(request: NextRequest) {
         resume: true,
         coverLetter: true,
         contacts: true,
-        user: true
       },
       orderBy: {
         createdAt: 'desc'
       }
     })
 
-    // Apply text search filter if provided
     if (search && search.length > 0) {
       const searchTerms = search.split(/\s+/).filter(term => term.length > 0)
-      
+
       applications = applications.filter(app => {
         const searchableText = [
           app.company,
@@ -49,7 +45,6 @@ export async function GET(request: NextRequest) {
           app.jobUrl
         ].filter(Boolean).join(' ').toLowerCase()
 
-        // All search terms must match
         return searchTerms.every(term => searchableText.includes(term))
       })
     }
@@ -64,7 +59,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
-    
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -72,7 +67,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { company, role, status, notes, jobUrl, appliedDate, resumeId, coverLetterId } = body
 
-    // Automatically set appliedDate when status is APPLIED or INTERVIEWING
     let finalAppliedDate = appliedDate ? new Date(appliedDate) : null
     const finalStatus = status || 'APPLIED'
     if ((finalStatus === 'APPLIED' || finalStatus === 'INTERVIEWING') && !appliedDate) {

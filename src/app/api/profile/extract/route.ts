@@ -1,44 +1,48 @@
 import { NextResponse } from "next/server"
-import { PrismaClient, Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
+import { prisma } from "@/lib/prisma"
 import { extractProfileFromResume } from "@/lib/profile-extraction-service"
+import { requireAuthenticatedUser } from '@/lib/api-auth'
 
-const prisma = new PrismaClient()
 
 export async function POST(request: Request) {
+  const authResult = await requireAuthenticatedUser()
+  if (authResult.response) {
+    return authResult.response
+  }
+
   try {
     const { userId, resumeText, resumeUrl } = await request.json()
 
-    if (!userId || !resumeText) {
-      return NextResponse.json({ error: "Missing userId or resumeText" }, { status: 400 })
+    if (!resumeText) {
+      return NextResponse.json({ error: "Missing resumeText" }, { status: 400 })
     }
 
-    // Extract profile using AI
+    if (userId && userId !== authResult.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const sessionUserId = authResult.user.id
     const extracted = await extractProfileFromResume(resumeText)
 
-    // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { id: userId }
+      where: { id: sessionUserId }
     })
 
-    // Check if email is already taken by a different user
     let safeEmail = extracted.email || null
     if (safeEmail) {
       const emailOwner = await prisma.user.findUnique({
         where: { email: safeEmail }
       })
-      // If email belongs to a different user, do not use it
-      if (emailOwner && emailOwner.id !== userId) {
+      if (emailOwner && emailOwner.id !== sessionUserId) {
         safeEmail = null
       }
     }
 
-    // For new users without a valid email, generate a placeholder
-    // (email is required in schema)
     if (!existingUser && !safeEmail) {
-      safeEmail = `user-${userId}@placeholder.local`
+      safeEmail = `user-${sessionUserId}@placeholder.local`
     }
 
-    // Prepare user data for update (email optional for existing users)
     const updateData = {
       name: extracted.name,
       resumeUrl: resumeUrl || undefined,
@@ -60,14 +64,12 @@ export async function POST(request: Request) {
       workHistory: extracted.workHistory as unknown as Prisma.InputJsonValue,
       extractedProfile: extracted as unknown as Prisma.InputJsonValue,
       lastExtracted: new Date(),
-      // Only update email if we have a valid one and user exists
       ...(existingUser && safeEmail ? { email: safeEmail } : {})
     }
 
-    // Prepare create data (email required for new users)
     const createData = {
-      id: userId,
-      email: safeEmail as string, // Will be placeholder if no real email
+      id: sessionUserId,
+      email: safeEmail as string,
       name: extracted.name,
       resumeUrl: resumeUrl || undefined,
       skills: [...extracted.primarySkills, ...extracted.secondarySkills],
@@ -90,9 +92,8 @@ export async function POST(request: Request) {
       lastExtracted: new Date()
     }
 
-    // Upsert user profile in database
     await prisma.user.upsert({
-      where: { id: userId },
+      where: { id: sessionUserId },
       create: createData,
       update: updateData
     })
@@ -101,7 +102,6 @@ export async function POST(request: Request) {
       success: true,
       profile: extracted
     })
-
   } catch (error) {
     console.error("Error extracting profile:", error)
     return NextResponse.json({

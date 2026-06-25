@@ -11,6 +11,7 @@ import { prisma } from "../prisma"
 import { fetchGreenhouse } from "./greenhouse"
 import { fetchLever } from "./lever"
 import { fetchAshby } from "./ashby"
+import { fetchWorkday } from "./workday"
 import { filterSpainJobs } from "./spain-filter"
 import { AdapterContext, JobPosting } from "./types"
 
@@ -25,7 +26,7 @@ export async function fetchFromTargetCompanies(): Promise<JobPosting[]> {
 
   for (const company of companies) {
     try {
-      if (!company.atsSlug && company.atsPlatform !== "custom") {
+      if (!company.atsSlug && !["custom", "workday"].includes(company.atsPlatform)) {
         await recordError(company.id, "Missing atsSlug for non-custom platform")
         continue
       }
@@ -34,6 +35,7 @@ export async function fetchFromTargetCompanies(): Promise<JobPosting[]> {
         companyId: company.id,
         companyName: company.name,
         atsSlug: company.atsSlug || "",
+        careersUrl: company.careersUrl,
       }
 
       let jobs: JobPosting[] = []
@@ -47,11 +49,11 @@ export async function fetchFromTargetCompanies(): Promise<JobPosting[]> {
         case "ashby":
           jobs = await fetchAshby(ctx)
           break
-        case "workable":
         case "workday":
-          console.log(
-            `[Target Companies] ${company.name}: ${company.atsPlatform} adapter not implemented yet — skipping`
-          )
+          jobs = await fetchWorkday(ctx)
+          break
+        case "workable":
+          console.log(`[Target Companies] ${company.name}: workable adapter not implemented yet — skipping`)
           continue
         case "custom":
           // Custom companies fall through to the legacy UserJobSource.web_scrape path;

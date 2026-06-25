@@ -68,9 +68,24 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const userId = session.user.id
 
+    // Whitelist updatable fields — never spread the raw body into update(), which
+    // would let a caller overwrite email, password, role, sync state, etc.
+    const ALLOWED_FIELDS = [
+      'name', 'skills', 'experience', 'resumeUrl', 'summary', 'location',
+      'salaryExpectation', 'workPreference', 'availability', 'yearsOfExperience',
+      'seniorityLevel', 'minFitScore', 'maxJobAgeDays', 'autoScan', 'scanFrequency',
+      'dailyApplicationGoal', 'education', 'primarySkills', 'secondarySkills',
+      'learningSkills', 'jobTitles', 'industries', 'excludeKeywords', 'workHistory',
+      'extractedProfile',
+    ] as const
+    const data: Record<string, unknown> = {}
+    for (const field of ALLOWED_FIELDS) {
+      if (body[field] !== undefined) data[field] = body[field]
+    }
+
     const user = await prisma.user.update({
       where: { id: userId },
-      data: body,
+      data,
       select: {
         id: true,
         email: true,

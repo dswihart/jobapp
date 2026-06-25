@@ -169,3 +169,16 @@ For comprehensive technical documentation including:
 
 See the [docs/](./docs/) directory for additional guides and documentation.
 
+
+## Documentation Updates (March 7, 2026)
+
+The following docs were added to improve implementation clarity and reduce regression risk:
+
+- docs/CODE_REVIEW_ACTIONS_2026-03-07.md
+- docs/API_RESPONSE_CONTRACTS.md
+- docs/CURRENT_STATUS_2026-03-07.md
+
+Recommended usage:
+- Use CODE_REVIEW_ACTIONS_2026-03-07.md as the short-term engineering checklist.
+- Use API_RESPONSE_CONTRACTS.md as the source of truth for API response shapes.
+- Use CURRENT_STATUS_2026-03-07.md for the current repository, validation, and risk state.

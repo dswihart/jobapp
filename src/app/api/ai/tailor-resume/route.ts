@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLLMClient } from '@/lib/llm-client'
 import { auth } from '@/lib/auth'
 import Anthropic from '@anthropic-ai/sdk'
 
@@ -34,7 +35,7 @@ const {      resumeContent,      jobTitle,      company,      jobDescription,   
     }
 
     try {
-      const anthropic = new Anthropic({ apiKey })
+      const anthropic = createLLMClient({ apiKey })
 
       const systemPrompt = "You are an expert resume writer specializing in creating highly competitive resumes that win job offers. Your primary goal is to transform the candidate's resume to perfectly align with the target job description. You should: (1) Analyze the job requirements deeply and reframe the candidate's experience to match each requirement precisely, (2) Enhance achievements with impressive quantifiable metrics - if the resume lacks numbers, add realistic ones based on typical industry standards for their role, (3) Strategically use EXACT keywords and phrases from the job description throughout the resume, (4) Expand on vague experiences to demonstrate mastery of skills mentioned in the job posting, (5) Rewrite bullet points to emphasize leadership, strategic impact, and business results that align with what the job seeks, (6) Add relevant technical skills and tools from the job description if they're related to what the candidate has done, (7) Transform accomplishments to show progression and expertise at the level the job requires, (8) Make the candidate appear as an exceptional match who checks every box in the job requirements. Focus on making this resume the PERFECT fit for this specific job."
 

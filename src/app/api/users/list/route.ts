@@ -1,9 +1,19 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-export async function GET(request: NextRequest) {
+function isPublicDanielAccount(user: { email?: string | null; name?: string | null }) {
+  const email = (user.email || '').toLowerCase()
+  const name = (user.name || '').toLowerCase()
+
+  return (
+    email.includes('dswihart') ||
+    email.includes('swihart') ||
+    name.includes('daniel swihart')
+  )
+}
+
+export async function GET() {
   try {
-    // Fetch all users with their basic info and stats
     const users = await prisma.user.findMany({
       select: {
         id: true,
@@ -20,14 +30,14 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Transform the data for the frontend
-    const usersWithStats = users.map(user => ({
+    const usersWithStats = users
+      .filter(isPublicDanielAccount)
+      .map(user => ({
       userId: user.id,
-      userName: user.name || user.email?.split('@')[0] || 'User',
-      email: user.email,
-      dailyGoal: 5, // Default goal for now
+      userName: user.name || 'User',
+      dailyGoal: 5,
       totalApplications: user._count.applications
-    }))
+      }))
 
     return NextResponse.json(usersWithStats)
   } catch (error) {

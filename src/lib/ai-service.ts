@@ -4,8 +4,114 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { createLLMClient } from '@/lib/llm-client'
+import OpenAI from 'openai'
 import * as cheerio from 'cheerio'
 import { prisma } from './prisma'
+
+/**
+ * Remove unpaired (lone) UTF-16 surrogate code units. They appear when scraped
+ * job text is truncated mid-emoji/character; left in place they make the JSON
+ * request body invalid and the LLM call 400s ("no low surrogate in string").
+ * Properly-paired emoji and all normal text are left untouched.
+ */
+function stripLoneSurrogates(s: string): string {
+  return s.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '')
+}
+
+
+/**
+ * Create MiniMax client using OpenAI-compatible API
+ */
+function createMiniMaxClient(): OpenAI | null {
+  const apiKey = process.env.MINIMAX_API_KEY
+  if (!apiKey) return null
+  return new OpenAI({
+    apiKey,
+    baseURL: 'https://api.minimaxi.chat/v1',
+  })
+}
+
+function createOpenAIClient(): OpenAI | null {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) return null
+  return new OpenAI({ apiKey })
+}
+
+/**
+ * Score a job using MiniMax (parallel to Claude for consensus scoring)
+ */
+async function scoreFitWithMiniMax(
+  prompt: string
+): Promise<EnhancedFitScore | null> {
+  const client = createMiniMaxClient()
+  if (!client) return null
+
+  try {
+    const response = await client.chat.completions.create({
+      model: 'MiniMax-Text-01',
+      max_tokens: 1024,
+      temperature: 0.3,
+      messages: [{ role: 'user', content: stripLoneSurrogates(prompt) }],
+    })
+
+    const text = response.choices[0]?.message?.content
+    if (!text) return null
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return null
+
+    const result = JSON.parse(jsonMatch[0])
+    return {
+      overall: Math.min(100, Math.max(0, result.overall ?? 0)),
+      skillMatch: Math.min(100, Math.max(0, result.skillMatch ?? 0)),
+      experienceMatch: Math.min(100, Math.max(0, result.experienceMatch ?? 0)),
+      seniorityMatch: Math.min(100, Math.max(0, result.seniorityMatch ?? 0)),
+      titleMatch: Math.min(100, Math.max(0, result.titleMatch ?? 0)),
+      industryMatch: Math.min(100, Math.max(0, result.industryMatch ?? 0)),
+      locationMatch: Math.min(100, Math.max(0, result.locationMatch ?? 0)),
+      reasoning: result.reasoning || '',
+      matchedSkills: result.matchedSkills || [],
+      missingSkills: result.missingSkills || [],
+      recommendations: result.recommendations || [],
+      strengths: result.strengths || [],
+      concerns: result.concerns || [],
+      scoreBreakdown: result.reasoning || '',
+      skillDemandInfo: {
+        highDemandMatches: result.highDemandMatches || [],
+        trendingSkillsNeeded: result.trendingSkillsNeeded || [],
+      },
+    }
+  } catch (err) {
+    console.error('[MiniMax] Scoring error:', err)
+    return null
+  }
+}
+
+/**
+ * Average two fit scores together (for consensus scoring)
+ */
+function averageFitScores(a: EnhancedFitScore, b: EnhancedFitScore): EnhancedFitScore {
+  const avg = (x: number, y: number) => Math.round((x + y) / 2)
+  return {
+    overall: avg(a.overall, b.overall),
+    skillMatch: avg(a.skillMatch, b.skillMatch),
+    experienceMatch: avg(a.experienceMatch, b.experienceMatch),
+    seniorityMatch: avg(a.seniorityMatch, b.seniorityMatch),
+    titleMatch: avg(a.titleMatch, b.titleMatch),
+    industryMatch: avg(a.industryMatch, b.industryMatch),
+    locationMatch: avg(a.locationMatch, b.locationMatch),
+    reasoning: a.reasoning,
+    matchedSkills: [...new Set([...a.matchedSkills, ...b.matchedSkills])],
+    missingSkills: [...new Set([...a.missingSkills, ...b.missingSkills])],
+    recommendations: a.recommendations,
+    strengths: a.strengths,
+    concerns: a.concerns,
+    scoreBreakdown: a.scoreBreakdown,
+    extractedJobSkills: a.extractedJobSkills,
+    skillDemandInfo: a.skillDemandInfo,
+  }
+}
 
 // Export basic interfaces for backward compatibility
 export interface UserProfile {
@@ -61,10 +167,19 @@ interface EnhancedFitScore {
   recommendations: string[]
   strengths: string[]
   concerns: string[]
+  scoreBreakdown: string
+  extractedJobSkills?: Array<{
+    name: string
+    category: string
+    isRequired: boolean
+  }>
   skillDemandInfo?: {
     highDemandMatches: string[]
     trendingSkillsNeeded: string[]
   }
+  // Internal: individual model scores for disagreement tracking
+  _claudeScore?: number
+  _miniMaxScore?: number
 }
 
 /**
@@ -141,13 +256,120 @@ async function getRecentLikedJobs(userId: string): Promise<Array<{ title: string
   }
 }
 
+
+
+async function getRejectionContext(userId: string): Promise<string> {
+  try {
+    // Get top rejection reasons
+    const reasons = await prisma.$queryRaw<Array<{ pattern_value: string; frequency: number }>>`
+      SELECT pattern_value, frequency FROM rejection_patterns
+      WHERE user_id = ${userId} AND pattern_type = 'REJECTION_REASON' AND frequency >= 2
+      ORDER BY frequency DESC LIMIT 10
+    `
+
+    // Get rejected companies (freq >= 2)
+    const companies = await prisma.$queryRaw<Array<{ pattern_value: string; frequency: number }>>`
+      SELECT pattern_value, frequency FROM rejection_patterns
+      WHERE user_id = ${userId} AND pattern_type = 'REJECTED_COMPANY' AND frequency >= 2
+      ORDER BY frequency DESC LIMIT 10
+    `
+
+    // Get rejected title keywords (freq >= 3 to avoid noise)
+    const keywords = await prisma.$queryRaw<Array<{ pattern_value: string; frequency: number }>>`
+      SELECT pattern_value, frequency FROM rejection_patterns
+      WHERE user_id = ${userId} AND pattern_type = 'REJECTED_TITLE_KEYWORD' AND frequency >= 3
+      ORDER BY frequency DESC LIMIT 15
+    `
+
+    // Get rejected locations (freq >= 2)
+    const locations = await prisma.$queryRaw<Array<{ pattern_value: string; frequency: number }>>`
+      SELECT pattern_value, frequency FROM rejection_patterns
+      WHERE user_id = ${userId} AND pattern_type = 'REJECTED_LOCATION' AND frequency >= 2
+      ORDER BY frequency DESC LIMIT 10
+    `
+
+    // Get seniority preferences
+    const seniority = await prisma.$queryRaw<Array<{ pattern_value: string; frequency: number }>>`
+      SELECT pattern_value, frequency FROM rejection_patterns
+      WHERE user_id = ${userId} AND pattern_type = 'REJECTED_SENIORITY' AND frequency >= 1
+      ORDER BY frequency DESC
+    `
+
+    // Get recent liked jobs with their notes (reasons why they were good)
+    const likedWithNotes = await prisma.jobOpportunity.findMany({
+      where: { userId, userFeedback: 'GOOD_MATCH' },
+      orderBy: { updatedAt: 'desc' },
+      take: 10,
+      select: { title: true, company: true, location: true, fitScore: true, notes: true }
+    })
+
+    const reasonLabels: Record<string, string> = {
+      'wrong_location': 'Wrong location / not remote',
+      'not_relevant_skills': 'Not relevant to skills',
+      'wrong_domain': 'Wrong industry or domain',
+      'too_senior': 'Too senior',
+      'too_junior': 'Too junior',
+      'not_authorized_location': 'Not authorized to work there',
+      'already_applied': 'Already applied'
+    }
+
+    let section = ''
+
+    if (reasons.length > 0) {
+      const reasonLines = reasons.map(r => `  - ${reasonLabels[r.pattern_value] || r.pattern_value} (${r.frequency}x)`).join('\n')
+      section += `\n**User Rejection Patterns (reasons jobs were rejected):**\n${reasonLines}\n`
+    }
+
+    if (companies.length > 0) {
+      section += `- Rejected companies: ${companies.map(c => c.pattern_value).join(', ')}\n`
+    }
+
+    if (keywords.length > 0) {
+      section += `- Frequently rejected title keywords: ${keywords.map(k => k.pattern_value).join(', ')}\n`
+    }
+
+    if (locations.length > 0) {
+      section += `- Rejected locations: ${locations.map(l => l.pattern_value).join(', ')}\n`
+    }
+
+    if (seniority.length > 0) {
+      const seniorityPrefs = seniority.map(s => s.pattern_value === 'too_senior' ? 'Dislikes overly senior roles' : 'Dislikes junior roles').join(', ')
+      section += `- Seniority: ${seniorityPrefs}\n`
+    }
+
+    if (likedWithNotes.length > 0) {
+      const likedLines = likedWithNotes.map(j => {
+        let line = `  - ${j.title} at ${j.company}`
+        if (j.location) line += ` (${j.location})`
+        if (j.notes) line += ` — ${j.notes}`
+        return line
+      }).join('\n')
+      section += `\n**Jobs the user explicitly liked (GOOD_MATCH):**\n${likedLines}\nScore similar roles, companies, locations, and domains HIGHER.\n`
+    }
+
+    if (section) {
+      section += `\nUSE THIS FEEDBACK: If this job matches rejection patterns (wrong location, wrong domain, rejected company), score it LOW. If it matches liked patterns, score it HIGHER. This feedback is MORE important than generic skill matching.\n`
+    }
+
+    return section
+  } catch (error) {
+    console.error('Error fetching rejection context:', error)
+    return ''
+  }
+}
+
 /**
  * Enhanced AI matching using Claude with skill database integration
  */
 export async function analyzeJobFitEnhanced(
   userProfile: EnhancedUserProfile,
   jobDescription: JobDescription,
-  userId?: string
+  userId?: string,
+  modelOverride?: string,
+  // When set (scan path), request a lean response: full detail only for jobs
+  // scoring >= this threshold — output tokens are 5x input price and the
+  // verbose fields are discarded for below-threshold jobs anyway
+  leanThreshold?: number
 ): Promise<EnhancedFitScore> {
   const apiKey = process.env.ANTHROPIC_API_KEY
 
@@ -156,7 +378,7 @@ export async function analyzeJobFitEnhanced(
   }
 
   try {
-    const anthropic = new Anthropic({ apiKey })
+    const anthropic = createLLMClient({ apiKey })
 
     // Get skill demand context from database
     const allUserSkills = [
@@ -180,22 +402,22 @@ export async function analyzeJobFitEnhanced(
 `
     }
 
-    // Fetch user preference history if userId provided
+    // Fetch user feedback context (likes + rejections)
     let preferenceSection = ''
     if (userId) {
-      const likedJobs = await getRecentLikedJobs(userId)
-      if (likedJobs.length > 0) {
-        const likedLines = likedJobs.map(j => `- ${j.title} at ${j.company} (scored ${j.fitScore}%)`).join("\n")
-        preferenceSection = "\n**User Preference History (jobs the user liked):**\n" + likedLines + "\nUse these as calibration - the user has confirmed these are good matches. Score similar roles and companies higher.\n"
-      }
+      preferenceSection = await getRejectionContext(userId)
     }
 
     const prompt = `You are a job matching AI for a cybersecurity professional. Score how well this candidate matches the job posting.
 
 **STEP 1: Determine if this is a security-related role.**
 Check the job title AND description for security indicators:
-- Title contains: security, cybersecurity, infosec, CISO, SOC, SIEM, DLP, IAM, PAM, compliance, GRC, threat, vulnerability, penetration, forensic, encryption, DevSecOps, SRE, cloud security, data protection, risk, audit
+- Title contains: security, cybersecurity, infosec, CISO, SOC, SIEM, DLP, IAM, PAM, compliance, GRC, threat, vulnerability, penetration, forensic, encryption, cloud security, data protection, risk, audit
 - Description mentions: security responsibilities, compliance frameworks, threat detection, incident response, access control, vulnerability management, security architecture, security tools
+
+RULE: If the job TITLE contains "security" in any form (e.g. Security Engineer; Application/Product/Cloud/Offensive/Information Security; AppSec; SOC; CISO; SecOps), the role IS security-related. Treat it as security in Step 2 and do NOT apply any non-security caps below.
+
+DEVSECOPS RULE: A "DevSecOps" title alone does NOT make a role security-related — these are usually pipeline/CI-CD/platform-tooling roles. Treat a DevSecOps role as security-related ONLY if the title also contains "Security" (e.g. "Cloud Security Engineer (DevSecOps)") OR the description centers on security architecture, threat modeling, vulnerability management, GRC/compliance, or detection — not merely "secure pipelines". Otherwise treat it as Pure DevOps in Step 2.
 
 **STEP 2: Score based on role domain.**
 
@@ -203,7 +425,7 @@ IF the role IS security-related → Score normally using skills/experience/senio
 
 IF the role is NOT security-related → Apply penalties:
 - Pure Cloud/Infrastructure (Cloud Architect, Azure/AWS Consultant, Solutions Architect with no security focus) → overall ≤35
-- Pure DevOps (only CI/CD, deployments, no security) → overall ≤35
+- Pure DevOps or pure DevSecOps (CI/CD, deployments, pipelines, platform tooling — security is incidental, no security architecture/threat/GRC focus) → overall ≤35
 - Pure Software Engineering/Backend/Frontend → overall ≤25
 - Pure Data/ML/AI Engineering → overall ≤25
 - Sales/Marketing/HR/Legal/Product/Support → overall ≤15
@@ -212,8 +434,10 @@ IF the role is NOT security-related → Apply penalties:
 IMPORTANT: Only score cloud roles high (55+) if they explicitly involve cloud SECURITY (e.g., Cloud Security Engineer, Cloud Security Architect). Generic cloud roles (Cloud Architect, Azure Consultant, Solutions Architect) that focus on infrastructure/migration/design without security responsibilities should be capped at 35.
 
 **STEP 3: Location check.**
-- Candidate needs: Remote, Barcelona, Spain, or Europe
-- USA-only/Asia-only with no remote option → locationMatch=0, cap overall at 30
+- Candidate is based in Spain (EU) and works fully remote. Acceptable: fully-remote/worldwide roles, EU-remote roles, or roles in Spain/Barcelona/Europe.
+- Fully remote / "Anywhere in the World" / Europe-eligible -> locationMatch 80-100, do NOT cap overall.
+- "Remote (US)" or US-time-zone-required -> locationMatch 45, cap overall at 50 (surface strong security matches so the candidate can judge work authorization)
+- On-site or hybrid in USA/Asia with no remote option -> locationMatch=0, cap overall at 30
 
 **Candidate Profile:**
 - Primary Skills: ${userProfile.primarySkills.join(', ')}
@@ -239,7 +463,24 @@ ${jobDescription.description}
 
 ${jobDescription.requirements ? `Requirements:\n${jobDescription.requirements}` : ''}
 
-Return a JSON object:
+${leanThreshold !== undefined ? `Return a JSON object:
+{
+  "overall": 0-100,
+  "skillMatch": 0-100,
+  "experienceMatch": 0-100,
+  "seniorityMatch": 0-100,
+  "titleMatch": 0-100,
+  "industryMatch": 0-100,
+  "locationMatch": 0-100,
+  "reasoning": "2-3 sentences",
+  "strengths": ["top 2 advantages"],
+  "concerns": ["top 2 gaps"],
+  "extractedJobSkills": [{"name": "Skill Name", "category": "Category", "isRequired": true}]
+}
+
+IMPORTANT: Always compute all seven score fields accurately using the scoring formula. If overall is below ${leanThreshold}, keep the REST of the response minimal — reasoning as ONE short sentence, and strengths, concerns, and extractedJobSkills as empty arrays (skip skill extraction entirely).
+
+For extractedJobSkills (only when overall >= ${leanThreshold}): extract ALL technical and soft skills from the job posting. Categories: Programming Language, Frontend Framework, Backend Framework, Database, Cloud Platform, DevOps, Security, Data & ML, Soft Skill, Tool, Methodology, Domain Knowledge. Normalize names (e.g. "k8s" -> "Kubernetes").` : `Return a JSON object:
 {
   "overall": 0-100,
   "skillMatch": 0-100,
@@ -255,18 +496,13 @@ Return a JSON object:
   "strengths": ["advantages"],
   "concerns": ["gaps"],
   "highDemandMatches": ["high-demand skills"],
-  "trendingSkillsNeeded": ["skills to learn"]
+  "trendingSkillsNeeded": ["skills to learn"],
+  "extractedJobSkills": [{"name": "Skill Name", "category": "Category", "isRequired": true}]
 }
 
-**Cybersecurity tool equivalences (treat as interchangeable):**
-- SIEM: Splunk ↔ ELK ↔ Sentinel ↔ QRadar ↔ Datadog Security
-- EDR/XDR: CrowdStrike ↔ SentinelOne ↔ Carbon Black ↔ Defender ↔ Cortex XDR
-- IAM/PAM: CyberArk ↔ Okta ↔ Entra ID ↔ SailPoint ↔ BeyondTrust
-- DLP: Purview ↔ Symantec DLP ↔ Digital Guardian ↔ Forcepoint
-- Cloud security: AWS Security Hub ↔ Azure Security Center ↔ Prisma Cloud ↔ Wiz
-- Vuln mgmt: Qualys ↔ Nessus ↔ Rapid7 ↔ Snyk ↔ Trivy
-- Network: Palo Alto ↔ Fortinet ↔ Check Point ↔ WAF (Imperva/Cloudflare)
-- GRC frameworks: GDPR ↔ PCI-DSS ↔ HIPAA ↔ SOX ↔ ISO 27001 ↔ NIST ↔ SOC2
+For extractedJobSkills: extract ALL technical and soft skills from the job posting. Categories: Programming Language, Frontend Framework, Backend Framework, Database, Cloud Platform, DevOps, Security, Data & ML, Soft Skill, Tool, Methodology, Domain Knowledge. Normalize names (e.g. "k8s" -> "Kubernetes").`}
+
+**Cybersecurity tools are interchangeable within categories** (SIEM, EDR/XDR, IAM/PAM, DLP, Cloud Security, Vuln Mgmt, Network, GRC). Treat equivalent vendor tools as matching skills.
 
 **Scoring formula:**
 - titleMatch 25% + skillMatch 35% + experienceMatch 15% + seniorityMatch 10% + locationMatch 10% + industryMatch 5%
@@ -275,15 +511,16 @@ Return a JSON object:
 
 Return ONLY valid JSON, no markdown.`
 
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 2048,
-      temperature: 0.3,
-      messages: [{
-        role: 'user',
-        content: prompt
-      }]
-    })
+    // Run Claude and MiniMax in parallel for consensus scoring
+    const [message, miniMaxResult] = await Promise.all([
+      anthropic.messages.create({
+        model: modelOverride || 'claude-haiku-4-5-20251001',
+        max_tokens: leanThreshold !== undefined ? 2048 : 4096,
+        temperature: 0.3,
+        messages: [{ role: 'user', content: stripLoneSurrogates(prompt) }],
+      }),
+      scoreFitWithMiniMax(prompt).catch(() => null),
+    ])
 
     const content = message.content[0]
     if (content.type !== 'text') {
@@ -299,7 +536,7 @@ Return ONLY valid JSON, no markdown.`
     const result = JSON.parse(jsonMatch[0])
 
     // Validate and ensure all fields present
-    return {
+    const claudeScore: EnhancedFitScore = {
       overall: Math.min(100, Math.max(0, result.overall)),
       skillMatch: Math.min(100, Math.max(0, result.skillMatch)),
       experienceMatch: Math.min(100, Math.max(0, result.experienceMatch)),
@@ -313,11 +550,27 @@ Return ONLY valid JSON, no markdown.`
       recommendations: result.recommendations || [],
       strengths: result.strengths || [],
       concerns: result.concerns || [],
+      scoreBreakdown: [
+        result.reasoning || '',
+        result.strengths?.length ? `Strengths: ${result.strengths.slice(0, 2).join(', ')}.` : '',
+        result.concerns?.length ? `Concerns: ${result.concerns.slice(0, 2).join(', ')}.` : '',
+      ].filter(Boolean).join(' ').slice(0, 500),
       skillDemandInfo: {
         highDemandMatches: result.highDemandMatches || [],
         trendingSkillsNeeded: result.trendingSkillsNeeded || []
       }
     }
+
+    // Average with MiniMax score if available
+    if (miniMaxResult) {
+      const averaged = averageFitScores(claudeScore, miniMaxResult)
+      averaged._claudeScore = claudeScore.overall
+      averaged._miniMaxScore = miniMaxResult.overall
+      console.log(`[AI] Consensus: Claude=${claudeScore.overall} MiniMax=${miniMaxResult.overall} Avg=${averaged.overall}`)
+      return averaged
+    }
+    claudeScore._claudeScore = claudeScore.overall
+    return claudeScore
 
   } catch (error) {
     console.error('Error with AI matching:', error)
@@ -413,6 +666,7 @@ async function fallbackMatching(
     recommendations: ['Review the job requirements carefully', 'Highlight your matching skills in your application'],
     strengths: matchedSkills.slice(0, 3),
     concerns: [],
+    scoreBreakdown: `Skill match: ${matchedSkills.length} of ${allSkills.length} skills matched.`,
     skillDemandInfo: {
       highDemandMatches,
       trendingSkillsNeeded: []
@@ -458,12 +712,94 @@ export async function analyzeJobFit(
 }
 
 /**
+ * Extract job details using MiniMax (primary extractor — 1M context window)
+ */
+async function extractJobWithMiniMax(
+  url: string,
+  prompt: string
+): Promise<{ title: string; company: string; description: string; requirements?: string; location?: string; salary?: string; employmentType?: string; experienceLevel?: string } | null> {
+  const client = createMiniMaxClient()
+  if (!client) return null
+
+  try {
+    const response = await client.chat.completions.create({
+      model: 'MiniMax-Text-01',
+      max_tokens: 2048,
+      temperature: 0.1,
+      messages: [{ role: 'user', content: stripLoneSurrogates(prompt) }],
+    })
+
+    const responseText = response.choices[0]?.message?.content
+    if (!responseText) return null
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return null
+
+    const result = JSON.parse(jsonMatch[0])
+    if (result.error || !result.title || !result.company) return null
+
+    return {
+      title: result.title,
+      company: result.company,
+      description: result.description || '',
+      requirements: result.requirements || undefined,
+      location: result.location || undefined,
+      salary: result.salary || undefined,
+      employmentType: result.employmentType || undefined,
+      experienceLevel: result.experienceLevel || undefined,
+    }
+  } catch (err) {
+    console.error('[MiniMax] Extraction error:', err)
+    return null
+  }
+}
+
+async function extractJobWithOpenAI(
+  prompt: string
+): Promise<{ title: string; company: string; description: string; requirements?: string; location?: string; salary?: string; employmentType?: string; experienceLevel?: string } | null> {
+  const client = createOpenAIClient()
+  if (!client) return null
+
+  try {
+    const response = await client.chat.completions.create({
+      model: 'gpt-4.1-mini',
+      max_tokens: 2048,
+      temperature: 0.1,
+      messages: [{ role: 'user', content: stripLoneSurrogates(prompt) }],
+    })
+
+    const responseText = response.choices[0]?.message?.content
+    if (!responseText) return null
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) return null
+
+    const result = JSON.parse(jsonMatch[0])
+    if (result.error || !result.title || !result.company) return null
+
+    return {
+      title: result.title,
+      company: result.company,
+      description: result.description || '',
+      requirements: result.requirements || undefined,
+      location: result.location || undefined,
+      salary: result.salary || undefined,
+      employmentType: result.employmentType || undefined,
+      experienceLevel: result.experienceLevel || undefined,
+    }
+  } catch (err) {
+    console.error('[OpenAI] Extraction error:', err)
+    return null
+  }
+}
+
+/**
  * Extract job details from HTML page using Claude AI
  */
 export async function extractJobFromHtml(
   html: string,
   url: string
-): Promise<{ title: string; company: string; description: string; requirements?: string; location?: string; salary?: string } | { error: string }> {
+): Promise<{ title: string; company: string; description: string; requirements?: string; location?: string; salary?: string; employmentType?: string; experienceLevel?: string } | { error: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {
     return { error: 'AI service unavailable' }
@@ -475,24 +811,16 @@ export async function extractJobFromHtml(
     $('script, style, nav, footer, header, noscript, iframe').remove()
     let text = $('body').text().replace(/\s+/g, ' ').trim()
 
-    // Truncate to 10k chars to limit token usage
-    if (text.length > 10000) {
-      text = text.substring(0, 10000)
+    // Truncate to 20k chars to capture more job detail
+    if (text.length > 20000) {
+      text = text.substring(0, 20000)
     }
 
-    if (text.length < 50) {
+    if (text.length < 300) {
       return { error: 'Page appears empty or requires JavaScript to render' }
     }
 
-    const anthropic = new Anthropic({ apiKey })
-
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 2048,
-      temperature: 0.1,
-      messages: [{
-        role: 'user',
-        content: `Extract job posting details from this page text. The URL is: ${url}
+    const extractPrompt = `Extract job posting details from this page text. The URL is: ${url}
 
 Page text:
 ${text}
@@ -502,15 +830,37 @@ Return ONLY valid JSON with these fields:
   "title": "job title",
   "company": "company name",
   "description": "full job description text",
-  "requirements": "requirements/qualifications if separate from description, or null",
-  "location": "work location or Remote, or null if not mentioned",
-  "salary": "salary/compensation if mentioned, or null"
+  "requirements": "requirements/qualifications and skills list",
+  "location": "work location or Remote or Hybrid, or null if not mentioned",
+  "salary": "salary range or compensation package if mentioned, or null",
+  "employmentType": "Full-time, Part-time, Contract, Freelance, Internship — exactly one, or null",
+  "experienceLevel": "Junior, Mid-level, Senior, Lead, Manager, Director — exactly one, or null"
 }
 
 If this page does NOT appear to be a job posting, return: {"error": "not_a_job_posting"}
 
 Return ONLY the JSON object, no markdown or explanation.`
-      }]
+
+    // Try MiniMax first, then OpenAI, then fall back to Claude Sonnet
+    const miniMaxExtracted = await extractJobWithMiniMax(url, extractPrompt)
+    if (miniMaxExtracted) {
+      console.log('[Import] Extracted via MiniMax')
+      return miniMaxExtracted
+    }
+
+    const openAIExtracted = await extractJobWithOpenAI(extractPrompt)
+    if (openAIExtracted) {
+      console.log('[Import] Extracted via OpenAI')
+      return openAIExtracted
+    }
+
+    console.log('[Import] MiniMax/OpenAI unavailable, falling back to Claude Sonnet')
+    const anthropic = createLLMClient({ apiKey })
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      temperature: 0.1,
+      messages: [{ role: 'user', content: stripLoneSurrogates(extractPrompt) }],
     })
 
     const responseText = message.content[0]
@@ -539,10 +889,108 @@ Return ONLY the JSON object, no markdown or explanation.`
       description: result.description || '',
       requirements: result.requirements || undefined,
       location: result.location || undefined,
-      salary: result.salary || undefined
+      salary: result.salary || undefined,
+      employmentType: result.employmentType || undefined,
+      experienceLevel: result.experienceLevel || undefined,
     }
   } catch (error) {
     console.error('[Import] AI extraction error:', error)
+    return { error: error instanceof Error ? error.message : 'AI extraction failed' }
+  }
+}
+
+export async function extractJobFromText(
+  text: string,
+  url: string
+): Promise<{ title: string; company: string; description: string; requirements?: string; location?: string; salary?: string; employmentType?: string; experienceLevel?: string } | { error: string }> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return { error: 'AI service unavailable' }
+  }
+
+  try {
+    let trimmedText = text.replace(/\s+/g, ' ').trim()
+    if (trimmedText.length > 20000) {
+      trimmedText = trimmedText.substring(0, 20000)
+    }
+
+    if (trimmedText.length < 300) {
+      return { error: 'Page content too short - the job posting may require login or is no longer available' }
+    }
+
+    const extractPrompt = `Extract job posting details from this page text. The URL is: ${url}
+
+Page text:
+${trimmedText}
+
+Return ONLY valid JSON with these fields:
+{
+  "title": "job title",
+  "company": "company name",
+  "description": "full job description text",
+  "requirements": "requirements/qualifications and skills list",
+  "location": "work location or Remote or Hybrid, or null if not mentioned",
+  "salary": "salary range or compensation package if mentioned, or null",
+  "employmentType": "Full-time, Part-time, Contract, Freelance, Internship — exactly one, or null",
+  "experienceLevel": "Junior, Mid-level, Senior, Lead, Manager, Director — exactly one, or null"
+}
+
+If this page does NOT appear to be a job posting (e.g. login page, error page, generic company page), return: {"error": "not_a_job_posting"}
+
+Return ONLY the JSON object, no markdown or explanation.`
+
+    // Try MiniMax first, then OpenAI, then fall back to Claude Sonnet
+    const miniMaxExtracted = await extractJobWithMiniMax(url, extractPrompt)
+    if (miniMaxExtracted) {
+      console.log('[Import] Extracted via MiniMax')
+      return miniMaxExtracted
+    }
+
+    const openAIExtracted = await extractJobWithOpenAI(extractPrompt)
+    if (openAIExtracted) {
+      console.log('[Import] Extracted via OpenAI')
+      return openAIExtracted
+    }
+
+    console.log('[Import] MiniMax/OpenAI unavailable, falling back to Claude Sonnet')
+    const anthropic = createLLMClient({ apiKey })
+    const message = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 2048,
+      temperature: 0.1,
+      messages: [{ role: 'user', content: stripLoneSurrogates(extractPrompt) }],
+    })
+
+    const responseText = message.content[0]
+    if (responseText.type !== 'text') {
+      return { error: 'Unexpected AI response type' }
+    }
+
+    const jsonMatch = responseText.text.match(/\{[\s\S]*\}/)
+    if (!jsonMatch) {
+      return { error: 'Failed to parse AI response' }
+    }
+
+    const result = JSON.parse(jsonMatch[0])
+
+    if (result.error) {
+      return { error: result.error === 'not_a_job_posting' ? 'Page does not contain a job posting (may require login)' : result.error }
+    }
+
+    if (!result.title || !result.company) {
+      return { error: 'Could not extract job title or company from page' }
+    }
+
+    return {
+      title: result.title,
+      company: result.company,
+      description: result.description || '',
+      requirements: result.requirements || undefined,
+      location: result.location || undefined,
+      salary: result.salary || undefined
+    }
+  } catch (error) {
+    console.error('[Import] AI text extraction error:', error)
     return { error: error instanceof Error ? error.message : 'AI extraction failed' }
   }
 }

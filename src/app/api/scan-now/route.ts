@@ -19,13 +19,15 @@ function cleanupOldEntries() {
 }
 
 export async function POST() {
+  let userId: string | null = null
+
   try {
     const session = await auth()
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = session.user.id
+    userId = session.user.id
 
     // Check rate limit
     const lastScan = scanCooldowns.get(userId)
@@ -59,7 +61,9 @@ export async function POST() {
     })
   } catch (error) {
     // Don't consume cooldown on failure — allow retry
-    scanCooldowns.delete(userId)
+    if (userId) {
+      scanCooldowns.delete(userId)
+    }
     console.error("[Scan Now] Error:", error)
     return NextResponse.json(
       {

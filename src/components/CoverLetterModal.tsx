@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useToast } from './ToastProvider'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import { Document, Packer, Paragraph, TextRun } from 'docx'
 import { saveAs } from 'file-saver'
@@ -21,6 +22,7 @@ interface CoverLetterModalProps {
 }
 
 export default function CoverLetterModal({ isOpen, onClose, application, onSuccess }: CoverLetterModalProps) {
+  const toast = useToast()
   const [coverLetter, setCoverLetter] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -87,7 +89,7 @@ export default function CoverLetterModal({ isOpen, onClose, application, onSucce
         throw new Error(data.error || 'Failed to save cover letter')
       }
 
-      alert('Cover letter saved successfully and attached to application!')
+      toast.success('Cover letter saved and attached to application!')
       if (onSuccess) onSuccess()
       onClose()
     } catch (err) {
@@ -124,7 +126,7 @@ export default function CoverLetterModal({ isOpen, onClose, application, onSucce
       saveAs(blob, filename)
     } catch (error) {
       console.error('Error downloading cover letter:', error)
-      alert('Failed to download cover letter')
+      toast.error('Failed to download cover letter')
     } finally {
       setIsDownloading(false)
     }

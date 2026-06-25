@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createLLMClient } from '@/lib/llm-client'
+import { requireAuthenticatedUser } from '@/lib/api-auth'
 import Anthropic from '@anthropic-ai/sdk'
 
 const fallbackMessages = [
@@ -13,6 +15,9 @@ const fallbackMessages = [
 ];
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAuthenticatedUser()
+  if (authResult.response) return authResult.response
+
   try {
     const apiKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY
     
@@ -25,7 +30,7 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    const anthropic = new Anthropic({ apiKey })
+    const anthropic = createLLMClient({ apiKey })
 
     const prompt = "Generate a single, unique, and highly motivational message for someone actively job hunting. The message should be encouraging, positive, and action-oriented. It should inspire them to keep applying to jobs and stay persistent. Keep it concise (1-2 sentences max) and vary the style and tone to avoid repetition. Do not use quotes or attribution."
 

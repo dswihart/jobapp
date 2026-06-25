@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { Document, Packer, Paragraph, TextRun } from 'docx'
-
-const prisma = new PrismaClient()
 
 export async function POST(request: NextRequest) {
   try {
@@ -72,12 +70,19 @@ export async function POST(request: NextRequest) {
 
     let linkedToApplication = false
     if (applicationId) {
-      await prisma.application.update({
+      // Only link to an application the authenticated user owns.
+      const target = await prisma.application.findUnique({
         where: { id: applicationId },
-        data: { coverLetterId: coverLetter.id }
+        select: { userId: true },
       })
-      linkedToApplication = true
-      console.log(`[Cover Letter] Linked cover letter ${coverLetter.id} to application ${applicationId}`)
+      if (target && target.userId === session.user.id) {
+        await prisma.application.update({
+          where: { id: applicationId },
+          data: { coverLetterId: coverLetter.id }
+        })
+        linkedToApplication = true
+        console.log(`[Cover Letter] Linked cover letter ${coverLetter.id} to application ${applicationId}`)
+      }
     }
 
     return NextResponse.json({

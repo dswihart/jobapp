@@ -3,10 +3,14 @@ import { promises as fs } from 'fs'
 import path from 'path'
 import { exec } from 'child_process'
 import { promisify } from 'util'
+import { requireAdminUser } from '@/lib/api-auth'
 
 const execAsync = promisify(exec)
 
 export async function POST(request: Request) {
+  const authResult = await requireAdminUser()
+  if (authResult.response) return authResult.response
+
   try {
     const { name, apiUrl, type } = await request.json()
 
@@ -16,7 +20,7 @@ export async function POST(request: Request) {
 
     // Sanitize name for file/class names
     const sanitizedName = name.replace(/[^a-zA-Z0-9]/g, '')
-    const fileName = name.toLowerCase().replace(/\s+/g, '-')
+    const fileName = name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '')
     const className = sanitizedName + 'Source'
 
     // Generate source file content

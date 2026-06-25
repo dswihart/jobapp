@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 
 interface Application {
   id: string
@@ -57,7 +57,19 @@ const statusOptions = [
   { value: 'ARCHIVED', label: 'Archived' }
 ]
 
+type EmailActivity = {
+  id: string
+  subject: string | null
+  fromName: string | null
+  fromAddress: string | null
+  classification: string
+  matchedCompany: string | null
+  snippet: string | null
+  receivedAt: string
+}
+
 export default function ApplicationModal({ isOpen, onClose, onSubmit, application }: ApplicationModalProps) {
+  const [emailActivity, setEmailActivity] = useState<EmailActivity[]>([])
   const [formData, setFormData] = useState({
     company: '',
     role: '',
@@ -74,6 +86,10 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
   const [coverLetters, setCoverLetters] = useState<CoverLetter[]>([])
   const [loadingResumes, setLoadingResumes] = useState(false)
   const [loadingCoverLetters, setLoadingCoverLetters] = useState(false)
+  const [uploadingResume, setUploadingResume] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [uploadingCoverLetter, setUploadingCoverLetter] = useState(false)
+  const [coverLetterUploadError, setCoverLetterUploadError] = useState('')
 
   // Fetch resumes and cover letters when modal opens
   useEffect(() => {
@@ -98,6 +114,36 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
     }
   }
 
+  const handleResumeFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadError('')
+    setUploadingResume(true)
+    try {
+      const baseName = file.name.replace(/\.[^.]+$/, '')
+      const label = formData.company
+        ? `${baseName} (${formData.company}${formData.role ? ' - ' + formData.role : ''})`
+        : baseName
+      const uploadData = new FormData()
+      uploadData.append('file', file)
+      uploadData.append('name', label)
+      const response = await fetch('/api/resumes', { method: 'POST', body: uploadData })
+      const data = await response.json()
+      if (!response.ok) {
+        setUploadError(data.error || 'Failed to upload resume')
+      } else {
+        setResumes(prev => [data.resume, ...prev])
+        setFormData(prev => ({ ...prev, resumeId: data.resume.id }))
+      }
+    } catch (error) {
+      console.error('Failed to upload resume:', error)
+      setUploadError('Failed to upload resume. Please try again.')
+    } finally {
+      setUploadingResume(false)
+      e.target.value = ''
+    }
+  }
+
   const fetchCoverLetters = async () => {
     setLoadingCoverLetters(true)
     try {
@@ -110,6 +156,36 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
       console.error('Failed to fetch cover letters:', error)
     } finally {
       setLoadingCoverLetters(false)
+    }
+  }
+
+  const handleCoverLetterFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCoverLetterUploadError('')
+    setUploadingCoverLetter(true)
+    try {
+      const baseName = file.name.replace(/\.[^.]+$/, '')
+      const label = formData.company
+        ? `${baseName} (${formData.company}${formData.role ? ' - ' + formData.role : ''})`
+        : baseName
+      const uploadData = new FormData()
+      uploadData.append('file', file)
+      uploadData.append('name', label)
+      const response = await fetch('/api/cover-letter/upload', { method: 'POST', body: uploadData })
+      const data = await response.json()
+      if (!response.ok) {
+        setCoverLetterUploadError(data.error || 'Failed to upload cover letter')
+      } else {
+        setCoverLetters(prev => [data.coverLetter, ...prev])
+        setFormData(prev => ({ ...prev, coverLetterId: data.coverLetter.id }))
+      }
+    } catch (error) {
+      console.error('Failed to upload cover letter:', error)
+      setCoverLetterUploadError('Failed to upload cover letter. Please try again.')
+    } finally {
+      setUploadingCoverLetter(false)
+      e.target.value = ''
     }
   }
 
@@ -141,6 +217,18 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
       })
     }
   }, [application, isOpen])
+
+  // Load job-search email activities recorded for this application (read-only).
+  useEffect(() => {
+    if (isOpen && application?.id) {
+      fetch(`/api/email-sync/events?applicationId=${application.id}`)
+        .then(res => (res.ok ? res.json() : { events: [] }))
+        .then(data => setEmailActivity(Array.isArray(data.events) ? data.events : []))
+        .catch(() => setEmailActivity([]))
+    } else {
+      setEmailActivity([])
+    }
+  }, [application?.id, isOpen])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -256,6 +344,20 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Attach a resume to this application
                 </p>
+                <label className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${uploadingResume ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <ArrowUpTrayIcon className="h-4 w-4" />
+                  {uploadingResume ? 'Uploading...' : 'Upload new resume'}
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    className="hidden"
+                    onChange={handleResumeFileUpload}
+                    disabled={uploadingResume}
+                  />
+                </label>
+                {uploadError && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">{uploadError}</p>
+                )}
               </div>
 
               <div>
@@ -280,6 +382,20 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Attach a cover letter to this application
                 </p>
+                <label className={`mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors ${uploadingCoverLetter ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <ArrowUpTrayIcon className="h-4 w-4" />
+                  {uploadingCoverLetter ? 'Uploading...' : 'Upload new cover letter'}
+                  <input
+                    type="file"
+                    accept=".pdf,.doc,.docx,.txt"
+                    className="hidden"
+                    onChange={handleCoverLetterFileUpload}
+                    disabled={uploadingCoverLetter}
+                  />
+                </label>
+                {coverLetterUploadError && (
+                  <p className="mt-1 text-xs text-red-600 dark:text-red-400">{coverLetterUploadError}</p>
+                )}
               </div>
 
               <div>
@@ -342,6 +458,40 @@ export default function ApplicationModal({ isOpen, onClose, onSubmit, applicatio
                   placeholder="Add any additional notes..."
                 />
               </div>
+
+              {application?.id && emailActivity.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    Email Activity{' '}
+                    <span className="text-xs font-normal text-gray-400">(auto-detected from your inbox)</span>
+                  </label>
+                  <div className="space-y-2 max-h-56 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 p-2">
+                    {emailActivity.map(ev => {
+                      const cls =
+                        ev.classification === 'INTERVIEW'
+                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                          : ev.classification === 'REJECTION'
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                      return (
+                        <div key={ev.id} className="text-xs bg-gray-50 dark:bg-gray-700/50 rounded-md p-2">
+                          <div className="flex items-center justify-between gap-2 mb-0.5">
+                            <span className={`px-1.5 py-0.5 rounded-full font-medium ${cls}`}>{ev.classification}</span>
+                            <span className="text-gray-400">{new Date(ev.receivedAt).toLocaleDateString()}</span>
+                          </div>
+                          <div className="font-medium text-gray-800 dark:text-gray-200 truncate">{ev.subject || '(no subject)'}</div>
+                          {(ev.fromName || ev.fromAddress) && (
+                            <div className="text-gray-500 dark:text-gray-400 truncate">{ev.fromName || ev.fromAddress}</div>
+                          )}
+                          {ev.snippet && (
+                            <div className="text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{ev.snippet}</div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="sticky bottom-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4 sm:p-6 flex flex-col-reverse sm:flex-row justify-end gap-3 rounded-b-2xl sm:rounded-b-lg">

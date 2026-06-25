@@ -1,18 +1,24 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 
 export async function GET(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { id } = await context.params
 
     const opportunity = await prisma.jobOpportunity.findUnique({
       where: { id }
     })
 
-    if (!opportunity) {
+    if (!opportunity || opportunity.userId !== session.user.id) {
       return NextResponse.json({ error: 'Opportunity not found' }, { status: 404 })
     }
 
@@ -31,9 +37,18 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { id } = await context.params
 
-    // Soft delete by setting isArchived to true
+    const job = await prisma.jobOpportunity.findUnique({ where: { id } })
+    if (!job || job.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
     await prisma.jobOpportunity.update({
       where: { id },
       data: { isArchived: true }
@@ -54,14 +69,26 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { id } = await context.params
     const body = await request.json()
 
-    // Update job opportunity (typically to mark as read)
-    await prisma.jobOpportunity.update({
-      where: { id },
-      data: { isRead: body.isRead ?? true }
-    })
+    const job = await prisma.jobOpportunity.findUnique({ where: { id } })
+    if (!job || job.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
+    const data: Record<string, unknown> = {}
+    if (body.isRead !== undefined) data.isRead = body.isRead
+    if (body.notes !== undefined) data.notes = body.notes
+    if (body.description !== undefined) data.description = body.description
+    if (body.requirements !== undefined) data.requirements = body.requirements
+
+    await prisma.jobOpportunity.update({ where: { id }, data })
 
     return NextResponse.json({ success: true })
 

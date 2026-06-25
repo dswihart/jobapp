@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuthenticatedUser } from '@/lib/api-auth'
 
 export async function GET() {
+  const authResult = await requireAuthenticatedUser()
+  if (authResult.response) {
+    return authResult.response
+  }
+
   try {
     const contacts = await prisma.contact.findMany({
+      where: { userId: authResult.user.id },
       include: {
         application: true,
-        user: true
       },
       orderBy: {
         createdAt: 'desc'
@@ -20,9 +26,29 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAuthenticatedUser()
+  if (authResult.response) {
+    return authResult.response
+  }
+
   try {
     const body = await request.json()
-    const { name, title, email, phone, notes, userId, applicationId } = body
+    const { name, title, email, phone, notes, applicationId, userId } = body
+
+    if (userId && userId !== authResult.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (applicationId) {
+      const application = await prisma.application.findUnique({
+        where: { id: applicationId },
+        select: { userId: true }
+      })
+
+      if (!application || application.userId !== authResult.user.id) {
+        return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+      }
+    }
 
     const contact = await prisma.contact.create({
       data: {
@@ -31,7 +57,7 @@ export async function POST(request: NextRequest) {
         email,
         phone,
         notes,
-        userId,
+        userId: authResult.user.id,
         applicationId
       },
       include: {

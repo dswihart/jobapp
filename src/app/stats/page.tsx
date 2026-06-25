@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { ArrowDownTrayIcon, ArrowPathIcon, ChartBarIcon, CalendarDaysIcon, DocumentTextIcon, FunnelIcon } from '@heroicons/react/24/outline'
 import Link from 'next/link'
+import SourceAnalytics from '@/components/SourceAnalytics'
 
 interface Application {
   id: string
@@ -10,6 +11,7 @@ interface Application {
 }
 
 interface UserData {
+  id?: string
   dailyApplicationGoal?: number
 }
 
@@ -38,6 +40,7 @@ interface StatsData {
     activeWeeks: number
   }
   recentActivity: {
+    last14Days: number
     last7Days: number
     last30Days: number
     last90Days: number
@@ -93,7 +96,7 @@ export default function StatsPage() {
   const [applications, setApplications] = useState<Application[]>([])
   const [userData, setUserData] = useState<UserData | null>(null)
   const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; goalMet: boolean }>>([])
-  const [last30DaysTotal, setLast30DaysTotal] = useState(0)
+  const [last14DaysTotal, setLast14DaysTotal] = useState(0)
   const [todayCount, setTodayCount] = useState(0)
 
   useEffect(() => {
@@ -105,41 +108,42 @@ export default function StatsPage() {
     fetchUser()
   }, [])
 
+  // Build the daily goal grid from the SAME endpoint the before-login page uses
+  // (/api/stats/user/[userId]). This guarantees the post-login stats match the
+  // pre-login stats exactly: same applied-date-only counting, same 16-day window,
+  // and same server-side date bucketing (no client/server timezone drift).
   useEffect(() => {
+    const userId = userData?.id
+    if (!userId) return
     const dailyGoal = userData?.dailyApplicationGoal || 6
-    const todayStr = getDateString(new Date())
+    let cancelled = false
 
-    const count = applications.filter(app => {
-      if (!app.appliedDate) return false
-      return getDateString(new Date(app.appliedDate)) === todayStr
-    }).length
-    setTodayCount(count)
+    ;(async () => {
+      try {
+        const response = await fetch(`/api/stats/user/${userId}`, { cache: 'no-store' })
+        if (!response.ok) return
+        const data = await response.json()
+        const dailyStats: Array<{ date: string; count: number }> = Array.isArray(data?.dailyStats) ? data.dailyStats : []
+        const goalData = dailyStats.map(day => ({
+          date: day.date,
+          count: day.count || 0,
+          goalMet: (day.count || 0) >= dailyGoal
+        }))
+        if (cancelled) return
+        setPastDaysGoals(goalData)
+        setLast14DaysTotal(goalData.reduce((sum, day) => sum + day.count, 0))
+        setTodayCount(goalData.length ? goalData[goalData.length - 1].count : 0)
+      } catch (error) {
+        console.error('Failed to load daily stats:', error)
+      }
+    })()
 
-    const goalData = []
-    for (let i = 0; i < 30; i++) {
-      const date = new Date()
-      date.setDate(date.getDate() - i)
-      const dateStr = getDateString(date)
-
-      const dayCount = applications.filter(app => {
-        if (!app.appliedDate) return false
-        return getDateString(new Date(app.appliedDate)) === dateStr
-      }).length
-
-      goalData.push({
-        date: date.toISOString(),
-        count: dayCount,
-        goalMet: dayCount >= dailyGoal
-      })
-    }
-
-    setPastDaysGoals(goalData.reverse())
-    setLast30DaysTotal(goalData.reduce((sum, day) => sum + day.count, 0))
-  }, [applications, userData])
+    return () => { cancelled = true }
+  }, [userData])
 
   const fetchApplications = async () => {
     try {
-      const response = await fetch('/api/applications')
+      const response = await fetch('/api/applications', { cache: 'no-store' })
       const data = await response.json()
       if (Array.isArray(data)) setApplications(data)
     } catch (error) {
@@ -149,7 +153,7 @@ export default function StatsPage() {
 
   const fetchUser = async () => {
     try {
-      const response = await fetch('/api/user')
+      const response = await fetch('/api/user', { cache: 'no-store' })
       const data = await response.json()
       setUserData(data)
     } catch (error) {
@@ -161,7 +165,7 @@ export default function StatsPage() {
     setLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/stats/export?period=${period}&type=summary`)
+      const response = await fetch(`/api/stats/export?period=${period}&type=summary`, { cache: 'no-store' })
       const result = await response.json()
       if (result.success) {
         setStats(result.data)
@@ -268,7 +272,7 @@ export default function StatsPage() {
 
         {/* Daily Goal Tracker */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
-          {/* Today's count + 30-day total header */}
+          {/* Today's count + 14-day total header */}
           <div className="grid grid-cols-2 divide-x dark:divide-gray-700">
             <div className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
@@ -289,45 +293,48 @@ export default function StatsPage() {
             <div className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Last 30 Days</h2>
+                  <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Last 16 Days</h2>
                   <p className="text-xs text-gray-500 dark:text-gray-500">Total applications</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-3xl font-bold text-gray-900 dark:text-white">{last30DaysTotal}</div>
-                  <div className="text-xs text-gray-500">/ {dailyGoal * 30} goal</div>
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">{last14DaysTotal}</div>
+                  <div className="text-xs text-gray-500">/ {dailyGoal * 16} goal</div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 30-day grid */}
+          {/* 14-day grid */}
           <div className="border-t dark:border-gray-700 p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">
-              Past 30 Days Goal Tracker ({dailyGoal} applications/day)
+              Past 16 Days Goal Tracker ({dailyGoal} applications/day)
             </h3>
-            <div className="grid grid-cols-10 gap-1 max-w-5xl mx-auto">
+            <div className="grid grid-cols-7 gap-2 sm:gap-3 max-w-6xl mx-auto">
               {pastDaysGoals.map((day, index) => {
                 const dateObj = new Date(day.date)
                 const dayNum = dateObj.toLocaleDateString("en-US", { day: "numeric" })
                 const monthShort = dateObj.toLocaleDateString("en-US", { month: "short" })
                 const weekday = dateObj.toLocaleDateString("en-US", { weekday: "short" })
+                const isToday = dateObj.toDateString() === new Date().toDateString()
 
                 return (
                   <div
                     key={index}
                     title={`${weekday} ${monthShort} ${dayNum}: ${day.count} applications`}
-                    className={`aspect-square flex flex-col items-center justify-center rounded text-center border ${
-                      day.goalMet
-                        ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600"
-                        : day.count >= 2
-                          ? "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-400 dark:border-yellow-600"
-                          : "bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600"
+                    className={`min-h-[88px] sm:min-h-[124px] px-2 py-3 sm:px-3 sm:py-4 flex flex-col items-center justify-center rounded-xl text-center border shadow-sm ${
+                      isToday
+                        ? "bg-blue-100 dark:bg-blue-900 border-blue-500 dark:border-blue-400"
+                        : day.goalMet
+                          ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600"
+                          : day.count >= 2
+                            ? "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-400 dark:border-yellow-600"
+                            : "bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600"
                     }`}
                   >
-                    <div className="text-[7px] text-gray-600 dark:text-gray-400">{weekday}</div>
-                    <div className="text-[7px] text-gray-600 dark:text-gray-400">{monthShort}</div>
-                    <div className="text-[10px] font-bold text-gray-900 dark:text-gray-100">{dayNum}</div>
-                    <div className={`text-[10px] font-bold ${
+                    <div className="text-[9px] sm:text-xs text-gray-600 dark:text-gray-400">{weekday}</div>
+                    <div className="text-[9px] sm:text-xs text-gray-600 dark:text-gray-400">{monthShort}</div>
+                    <div className="text-sm sm:text-xl font-bold text-gray-900 dark:text-gray-100">{dayNum}</div>
+                    <div className={`text-base sm:text-2xl font-bold ${
                       day.goalMet
                         ? "text-green-700 dark:text-green-400"
                         : day.count >= 2
@@ -414,11 +421,11 @@ export default function StatsPage() {
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                   Activity
                 </h2>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600 dark:text-gray-400">Last 7 days</span>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                    <span className="text-gray-600 dark:text-gray-400">Last 14 days</span>
                     <span className="text-xl font-bold text-gray-900 dark:text-white">
-                      {stats.recentActivity.last7Days}
+                      {stats.recentActivity.last14Days}
                     </span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -638,6 +645,11 @@ export default function StatsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+            {/* Source Performance */}
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 mt-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Source Performance</h2>
+              <SourceAnalytics />
             </div>
           </>
         )}

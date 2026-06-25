@@ -4,6 +4,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { createLLMClient } from '@/lib/llm-client'
 
 interface EnhancedUserProfile {
   primarySkills: string[]
@@ -64,7 +65,7 @@ export async function analyzeJobFitEnhanced(
   }
 
   try {
-    const anthropic = new Anthropic({ apiKey })
+    const anthropic = createLLMClient({ apiKey })
 
     const prompt = `You are an expert career advisor and job matching AI. Analyze how well this candidate matches the job posting.
 
@@ -138,7 +139,7 @@ Use this weighted formula but be generous with transferable skills and growth po
 - Return ONLY valid JSON, no markdown or extra text`
 
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       temperature: 0.3,
       messages: [{

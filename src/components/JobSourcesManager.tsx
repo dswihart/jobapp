@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useToast } from "./ToastProvider"
 import {
   PlusIcon,
   TrashIcon,
@@ -81,9 +82,11 @@ const emptyForm = {
 }
 
 export default function JobSourcesManager({ userId }: Props) {
+  const toast = useToast()
   const [sources, setSources] = useState<JobSource[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [editingSource, setEditingSource] = useState<JobSource | null>(null)
   const [testingSource, setTestingSource] = useState<string | null>(null)
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({})
   const [expandedSource, setExpandedSource] = useState<string | null>(null)
@@ -137,7 +140,7 @@ export default function JobSourcesManager({ userId }: Props) {
         setSources((prev) => prev.filter((s) => s.id !== id))
       } else {
         const data = await response.json()
-        alert(data.error || "Failed to delete source")
+        toast.error(data.error || "Failed to delete source")
       }
     } catch (error) {
       console.error("Error deleting source:", error)
@@ -201,6 +204,66 @@ export default function JobSourcesManager({ userId }: Props) {
     }
   }
 
+
+
+  const handleEdit = (source: JobSource) => {
+    setEditingSource(source)
+    setFormData({
+      name: source.name,
+      description: source.description || "",
+      sourceType: source.sourceType,
+      feedUrl: source.feedUrl || "",
+      scrapeUrl: source.scrapeUrl || "",
+      scrapeSelector: source.scrapeSelector || "",
+      titleSelector: source.titleSelector || "",
+      companySelector: source.companySelector || "",
+      linkSelector: source.linkSelector || "",
+      descriptionSelector: source.descriptionSelector || "",
+      apiEndpoint: source.apiEndpoint || "",
+      apiKey: source.apiKey || "",
+      searchKeywords: (source.searchKeywords || []).join(", "),
+      excludeKeywords: (source.excludeKeywords || []).join(", "),
+      enabled: source.enabled,
+    })
+    setShowAddForm(true)
+    setExpandedSource(null)
+  }
+
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingSource) return
+
+    const submitData = {
+      id: editingSource.id,
+      ...formData,
+      searchKeywords: formData.searchKeywords
+        ? formData.searchKeywords.split(",").map((k) => k.trim()).filter(Boolean)
+        : [],
+      excludeKeywords: formData.excludeKeywords
+        ? formData.excludeKeywords.split(",").map((k) => k.trim()).filter(Boolean)
+        : [],
+    }
+
+    try {
+      const response = await fetch("/api/user-job-sources", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(submitData),
+      })
+
+      if (response.ok) {
+        await loadSources()
+        setShowAddForm(false)
+        setEditingSource(null)
+        setFormData({ ...emptyForm })
+      } else {
+        const data = await response.json()
+        toast.error(data.error || "Failed to update source")
+      }
+    } catch (error) {
+      console.error("Error updating source:", error)
+    }
+  }
   // Group sources by type
   const groupedSources = sources.reduce<Record<string, JobSource[]>>(
     (acc, source) => {
@@ -229,7 +292,7 @@ export default function JobSourcesManager({ userId }: Props) {
           </p>
         </div>
         <button
-          onClick={() => setShowAddForm(!showAddForm)}
+          onClick={() => { setShowAddForm(!showAddForm); setEditingSource(null); setFormData({ ...emptyForm }) }}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
         >
           <PlusIcon className="h-5 w-5" />
@@ -239,8 +302,8 @@ export default function JobSourcesManager({ userId }: Props) {
 
       {showAddForm && (
         <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg border">
-          <h3 className="text-lg font-semibold mb-4">Add New Source</h3>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <h3 className="text-lg font-semibold mb-4">{editingSource ? "Edit Source" : "Add New Source"}</h3>
+          <form onSubmit={editingSource ? handleUpdate : handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-1">Name</label>

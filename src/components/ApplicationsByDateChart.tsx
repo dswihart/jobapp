@@ -14,27 +14,36 @@ interface ApplicationsByDateChartProps {
   showTitle?: boolean
   height?: number
   userId?: string
+  days?: number
 }
 
-export default function ApplicationsByDateChart({ showTitle = true, height = 300, userId }: ApplicationsByDateChartProps) {
+export default function ApplicationsByDateChart({ showTitle = true, height = 300, userId, days = 7 }: ApplicationsByDateChartProps) {
   const [data, setData] = useState<ChartData[]>([])
   const [total, setTotal] = useState(0)
   const [totalApplied, setTotalApplied] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [rangeDays, setRangeDays] = useState(days)
 
   useEffect(() => {
     fetchData()
-  }, [userId])
+  }, [userId, days])
 
   const fetchData = async () => {
     try {
-      const response = await fetch('/api/stats/applications-by-date')
+      const searchParams = new URLSearchParams()
+      searchParams.set('days', String(days))
+      if (userId) {
+        searchParams.set('userId', userId)
+      }
+
+      const response = await fetch(`/api/stats/applications-by-date?${searchParams.toString()}`)
       const result = await response.json()
 
       if (result.success) {
-        setData(result.last30Days)
+        setData(result.recentDays || [])
         setTotal(result.total)
         setTotalApplied(result.totalApplied || 0)
+        setRangeDays(result.rangeDays || days)
       }
     } catch (error) {
       console.error('Failed to fetch application statistics:', error)
@@ -77,7 +86,7 @@ export default function ApplicationsByDateChart({ showTitle = true, height = 300
           </h3>
           <div className="flex items-center gap-4 mt-2">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Last 30 days
+              Last {rangeDays} days
             </p>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">

@@ -14,6 +14,7 @@ export interface AdapterContext {
   companyId: string
   companyName: string
   atsSlug: string
+  careersUrl: string
 }
 
 const USER_AGENT =

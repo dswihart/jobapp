@@ -5,6 +5,7 @@ import { Loader2, Download, Save, Sparkles, CheckCircle, ArrowLeft } from "lucid
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx'
 import { saveAs } from 'file-saver'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 interface JobOpportunity {
   id: string
@@ -84,6 +85,8 @@ export default function ResumeTailor() {
   const [instructions, setInstructions] = useState("")
   const [activeTab, setActiveTab] = useState("tailored")
 
+  const searchParams = useSearchParams()
+
   useEffect(() => {
     fetchJobs()
     fetchResumes()
@@ -114,7 +117,13 @@ export default function ResumeTailor() {
         }))
 
       // Combine both lists
-      setJobs([...opportunities, ...applications])
+      const allJobs = [...opportunities, ...applications]
+      setJobs(allJobs)
+      // Pre-select job from URL param
+      const jobIdParam = searchParams.get('jobId')
+      if (jobIdParam && allJobs.some(j => j.id === jobIdParam)) {
+        setSelectedJob(jobIdParam)
+      }
     } catch (error) {
       console.error("Error fetching jobs:", error)
       setError("Failed to load job opportunities")

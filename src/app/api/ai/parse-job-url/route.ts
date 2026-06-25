@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createLLMClient } from '@/lib/llm-client'
 import { analyzeJobFitEnhanced } from "@/lib/ai-service"
 import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
 import puppeteer from "puppeteer"
+import { requireAuthenticatedUser } from "@/lib/api-auth"
+import { isAllowedUrl } from "@/lib/url-validation"
 
-const client = new Anthropic({
+const client = createLLMClient({
   apiKey: process.env.ANTHROPIC_API_KEY!,
 })
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAuthenticatedUser()
+  if (authResult.response) return authResult.response
+
   try {
     const body = await request.json()
     let { url } = body
@@ -36,6 +42,12 @@ export async function POST(request: NextRequest) {
         { error: "Invalid URL format. Please enter a valid URL like https://example.com/job" },
         { status: 400 }
       )
+    }
+
+    // SSRF check
+    const urlCheck = isAllowedUrl(url)
+    if (!urlCheck.allowed) {
+      return NextResponse.json({ error: `URL not allowed: ${urlCheck.reason}` }, { status: 400 })
     }
 
     console.log("Fetching job page with Puppeteer:", url)
@@ -172,9 +184,8 @@ If information is not found, use null for that field. Be concise and accurate.`
     // Calculate fit score for the parsed job
     let fitScore = null
     try {
-      // Get user profile (using default user for now)
       const user = await prisma.user.findUnique({
-        where: { id: "default-user-id" }
+        where: { id: authResult.user.id }
       })
 
       if (user && parsedData.role) {

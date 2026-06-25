@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useToast } from './ToastProvider'
 import { DocumentTextIcon, TrashIcon, StarIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarIconSolid } from '@heroicons/react/24/solid'
 
@@ -16,6 +17,7 @@ interface Resume {
 }
 
 export default function ResumeManager() {
+  const toast = useToast()
   const [resumes, setResumes] = useState<Resume[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -73,13 +75,14 @@ export default function ResumeManager() {
         await loadResumes()
         setShowUploadForm(false)
         setFormData({ name: '', description: '', isPrimary: false, file: null })
+        toast.success('Resume uploaded')
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to upload resume')
+        toast.error(error.error || 'Failed to upload resume')
       }
     } catch (error) {
       console.error('Error uploading resume:', error)
-      alert('Failed to upload resume')
+      toast.error('Failed to upload resume')
     } finally {
       setUploading(false)
     }
@@ -95,13 +98,14 @@ export default function ResumeManager() {
 
       if (response.ok) {
         setResumes(prev => prev.filter(r => r.id !== id))
+        toast.info(`Deleted "${name}"`)
       } else {
         const error = await response.json()
-        alert(error.error || 'Failed to delete resume')
+        toast.error(error.error || 'Failed to delete resume')
       }
     } catch (error) {
       console.error('Error deleting resume:', error)
-      alert('Failed to delete resume')
+      toast.error('Failed to delete resume')
     }
   }
 

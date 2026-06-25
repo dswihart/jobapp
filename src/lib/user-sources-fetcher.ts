@@ -8,18 +8,41 @@ import { isAllowedUrl } from "./url-validation"
 import * as cheerio from "cheerio"
 
 const USER_AGENT =
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 const FETCH_TIMEOUT_MS = 15000
+const RETRY_DELAY_MS = 3000
+
+/**
+ * Fetch with one retry on network-level failures (TypeError: fetch failed).
+ * HTTP errors (4xx, 5xx) are not retried.
+ */
+async function fetchWithRetry(url: string, options: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, options)
+  } catch (err) {
+    // Only retry on network errors (TypeError), not on HTTP errors
+    if (err instanceof TypeError) {
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
+      return fetch(url, options)
+    }
+    throw err
+  }
+}
 
 /**
  * Safely parse a date string. Returns current date if parsing fails or produces epoch.
  */
-function safeParseDate(raw: string | undefined | null, sourceName: string): Date {
-  if (!raw || raw.trim() === "") {
+function safeParseDate(raw: string | number | undefined | null, sourceName: string): Date {
+  if (raw === null || raw === undefined || raw === "") {
     return new Date()
   }
-  const parsed = new Date(raw)
+  if (typeof raw === "number") {
+    const ms = raw < 1e12 ? raw * 1000 : raw
+    const d = new Date(ms)
+    return (isNaN(d.getTime()) || d.getFullYear() < 2000) ? new Date() : d
+  }
+  const parsed = new Date(String(raw))
   if (isNaN(parsed.getTime()) || parsed.getFullYear() < 2000) {
     console.log(`[SafeDate] Invalid date from ${sourceName}: "${raw}" — treating as fresh`)
     return new Date()
@@ -151,11 +174,14 @@ async function fetchFromRSS(
   sourceName: string
 ): Promise<JobPosting[]> {
   try {
-    const response = await fetch(feedUrl, {
+    const response = await fetchWithRetry(feedUrl, {
       headers: {
         "User-Agent": USER_AGENT,
         Accept:
           "application/rss+xml, application/xml, text/xml, application/json, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
       },
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       redirect: "follow", // Allow redirects for RSS (URL pre-validated upstream)
@@ -323,7 +349,7 @@ async function fetchFromAPI(
       headers["Authorization"] = `Bearer ${apiKey}`
     }
 
-    const response = await fetch(endpoint, {
+    const response = await fetchWithRetry(endpoint, {
       headers,
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       redirect: "error", // Prevent SSRF via redirect to internal URLs
@@ -341,21 +367,22 @@ async function fetchFromAPI(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return jobsArray.map((job: any) => ({
-      title: job.title || job.name || "Untitled",
+      title: job.title || job.jobTitle || job.position || job.name || "Untitled",
       company:
-        job.company || job.company_name || job.company_name || "Unknown Company",
-      description: (job.description || "").substring(0, 2000),
+        job.company || job.company_name || job.companyName || "Unknown Company",
+      description: (job.description || job.jobDescription || job.jobExcerpt || "").substring(0, 2000),
       requirements: job.requirements || job.tags?.join(", ") || "",
       location:
         job.location ||
         job.candidate_required_location ||
+        job.jobGeo ||
         job.remote ||
         undefined,
       salary: job.salary || undefined,
       jobUrl: job.url || job.link || "",
-      postedDate: safeParseDate(job.posted_date || job.publication_date || job.created_at, sourceName),
+      postedDate: safeParseDate(job.posted_date || job.publication_date || job.pubDate || job.created_at, sourceName),
       source: sourceName,
-    }))
+    })).filter((j: JobPosting) => j.title !== "Untitled" && !!j.jobUrl)
   } catch (error) {
     console.error(`[${sourceName}] API fetch error:`, error)
     return []

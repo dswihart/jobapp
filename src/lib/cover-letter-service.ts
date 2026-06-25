@@ -4,8 +4,9 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { createLLMClient } from '@/lib/llm-client'
 
-const anthropic = new Anthropic({
+const anthropic = createLLMClient({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
 })
 
@@ -55,7 +56,7 @@ Generate ONLY the cover letter text, no additional commentary.`
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2000,
       temperature: 0.7,
       messages: [{

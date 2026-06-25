@@ -32,10 +32,15 @@ model User {
 
   // Job search preferences
   minFitScore          Int?     @default(40)
+  notificationThreshold Int?     @default(80)
   maxJobAgeDays        Int?     @default(7)
   autoScan             Boolean? @default(true)
   scanFrequency        String?  @default("daily")
   dailyApplicationGoal Int?     @default(6)
+  emailSyncEnabled     Boolean? @default(false) @map("email_sync_enabled")
+  emailSyncLookbackDays Int?    @default(14) @map("email_sync_lookback_days")
+  lastEmailSyncAt      DateTime? @map("last_email_sync_at")
+  lastEmailSyncError   String?  @db.Text @map("last_email_sync_error")
 
   education       String[] @default([])
   primarySkills   String[] @default([])
@@ -62,6 +67,7 @@ model User {
   contacts      Contact[]
   followUps     FollowUp[]
   jobSources    UserJobSource[]
+  emailSyncEvents EmailSyncEvent[]
 
   @@map("users")
 }
@@ -94,6 +100,7 @@ model Application {
 
   contacts Contact[]
   followUps FollowUp[]
+  emailSyncEvents EmailSyncEvent[]
 
   @@map("applications")
 }
@@ -143,7 +150,11 @@ model JobOpportunity {
   isArchived   Boolean   @default(false)
   deletedAt    DateTime?
   fitScore     Float?
+  scoreBreakdown String?  @db.Text
+  employmentType String?
+  experienceLevel String?
   userFeedback String?
+  notes        String?   @db.Text
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -175,6 +186,38 @@ enum AlertType {
   NEW_JOB
   APPLICATION_UPDATE
   REMINDER
+  HIGH_FIT_SCORE
+}
+
+enum EmailSyncClassification {
+  INTERVIEW
+  REJECTION
+  UPDATE
+  OTHER
+}
+
+model EmailSyncEvent {
+  id             String                  @id @default(cuid())
+  messageId      String                  @unique @map("message_id")
+  threadId       String?                 @map("thread_id")
+  subject        String?
+  fromAddress    String?                 @map("from_address")
+  fromName       String?                 @map("from_name")
+  receivedAt     DateTime                @map("received_at")
+  classification EmailSyncClassification @default(OTHER)
+  matchedCompany String?                 @map("matched_company")
+  snippet        String?                 @db.Text
+  createdAt      DateTime                @default(now()) @map("created_at")
+
+  userId         String                  @map("user_id")
+  user           User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  applicationId  String?                 @map("application_id")
+  application    Application?            @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, receivedAt])
+  @@index([applicationId])
+  @@map("email_sync_events")
 }
 
 model Resume {
@@ -453,6 +496,7 @@ model Interview {
   aiAnalysis      Json?    @map("ai_analysis") // Stores structured AI analysis
   followUpSteps   Json?    @map("follow_up_steps") // AI-generated follow-up steps
   analyzedAt      DateTime? @map("analyzed_at")
+  reminderSentAt  DateTime? @map("reminder_sent_at")
   
   // Feedback received
   companyFeedback String?  @map("company_feedback") @db.Text

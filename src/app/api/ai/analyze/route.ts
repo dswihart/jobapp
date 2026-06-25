@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAuthenticatedUser } from '@/lib/api-auth'
 import { analyzeJobFit, UserProfile, JobDescription } from '@/lib/ai-service'
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAuthenticatedUser()
+  if (authResult.response) return authResult.response
+
   try {
     const body = await request.json()
     const { userProfile, jobDescription } = body

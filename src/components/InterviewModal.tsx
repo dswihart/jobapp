@@ -28,16 +28,90 @@ export default function InterviewModal({ isOpen, onClose, application, onSuccess
   const [interviewRound, setInterviewRound] = useState(1)
   const [interviewNotes, setInterviewNotes] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingDetails, setLoadingDetails] = useState(false)
   const [error, setError] = useState('')
+
+  const normalizeInterviewTime = (value: string) => {
+    const trimmed = value.trim()
+    if (!trimmed) return ''
+
+    const hhmm = trimmed.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?$/)
+    if (hhmm) {
+      return `${hhmm[1].padStart(2, '0')}:${hhmm[2]}`
+    }
+
+    const hourOnly = trimmed.match(/^([01]?\d|2[0-3])$/)
+    if (hourOnly) {
+      return `${hourOnly[1].padStart(2, '0')}:00`
+    }
+
+    const ampm = trimmed.match(/^(\d{1,2})(?::([0-5]\d))?\s*(am|pm)$/i)
+    if (ampm) {
+      let hours = Number(ampm[1])
+      const minutes = ampm[2] || '00'
+      const meridiem = ampm[3].toLowerCase()
+
+      if (hours < 1 || hours > 12) {
+        return null
+      }
+
+      if (meridiem === 'pm' && hours !== 12) {
+        hours += 12
+      }
+
+      if (meridiem === 'am' && hours === 12) {
+        hours = 0
+      }
+
+      return `${String(hours).padStart(2, '0')}:${minutes}`
+    }
+
+    return null
+  }
 
   useEffect(() => {
     if (application && isOpen) {
-      // Pre-fill if interview details already exist
       setInterviewDate(application.interviewDate ? application.interviewDate.split('T')[0] : '')
       setInterviewTime(application.interviewTime || '')
       setInterviewType(application.interviewType || 'video')
       setInterviewRound(application.interviewRound || 1)
       setInterviewNotes(application.interviewNotes || '')
+    }
+  }, [application, isOpen])
+
+  useEffect(() => {
+    if (!application || !isOpen) return
+
+    let isActive = true
+
+    const loadInterviewDetails = async () => {
+      setLoadingDetails(true)
+      try {
+        const response = await fetch(`/api/applications/${application.id}/interview`)
+        const data = await response.json()
+
+        if (!response.ok || !isActive) {
+          return
+        }
+
+        setInterviewDate(data.interviewDate ? data.interviewDate.split('T')[0] : '')
+        setInterviewTime(data.interviewTime || '')
+        setInterviewType(data.interviewType || 'video')
+        setInterviewRound(data.interviewRound || 1)
+        setInterviewNotes(data.interviewNotes || '')
+      } catch (err) {
+        console.error('Error loading interview details:', err)
+      } finally {
+        if (isActive) {
+          setLoadingDetails(false)
+        }
+      }
+    }
+
+    loadInterviewDetails()
+
+    return () => {
+      isActive = false
     }
   }, [application, isOpen])
 
@@ -49,12 +123,24 @@ export default function InterviewModal({ isOpen, onClose, application, onSuccess
     setError('')
 
     try {
+      const normalizedInterviewTime = normalizeInterviewTime(interviewTime)
+
+      if (normalizedInterviewTime === null) {
+        setError('Invalid interview time')
+        setLoading(false)
+        return
+      }
+
+      if (normalizedInterviewTime !== interviewTime) {
+        setInterviewTime(normalizedInterviewTime)
+      }
+
       const response = await fetch(`/api/applications/${application.id}/interview`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          interviewDate: interviewDate ? new Date(interviewDate + 'T' + (interviewTime || '00:00')).toISOString() : null,
-          interviewTime,
+          interviewDate: interviewDate || null,
+          interviewTime: normalizedInterviewTime,
           interviewType,
           interviewRound,
           interviewNotes
@@ -148,6 +234,12 @@ export default function InterviewModal({ isOpen, onClose, application, onSuccess
               </div>
             )}
 
+            {loadingDetails && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 px-4 py-3 rounded-lg">
+                Loading latest interview details...
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -167,11 +259,15 @@ export default function InterviewModal({ isOpen, onClose, application, onSuccess
                   Interview Time
                 </label>
                 <input
-                  type="time"
+                  type="text"
                   value={interviewTime}
                   onChange={(e) => setInterviewTime(e.target.value)}
+                  placeholder="14:30 or 2:30 PM"
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Accepted formats: `14:30`, `2:30 PM`, `8pm`, or `8`
+                </p>
               </div>
 
               <div>
@@ -206,13 +302,14 @@ export default function InterviewModal({ isOpen, onClose, application, onSuccess
                   <option value={3}>3rd Round</option>
                   <option value={4}>4th Round</option>
                   <option value={5}>Final Round</option>
-                </select>
+                  </select>
               </div>
+
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Interview Notes
+                Preparation Notes
               </label>
               <textarea
                 value={interviewNotes}

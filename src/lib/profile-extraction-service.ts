@@ -4,6 +4,7 @@
  */
 
 import Anthropic from '@anthropic-ai/sdk'
+import { createLLMClient } from '@/lib/llm-client'
 
 interface ExtractedProfile {
   // Basic info
@@ -52,7 +53,7 @@ export async function extractProfileFromResume(resumeText: string): Promise<Extr
     throw new Error('ANTHROPIC_API_KEY not configured')
   }
 
-  const anthropic = new Anthropic({ apiKey })
+  const anthropic = createLLMClient({ apiKey })
 
   const prompt = `You are an expert resume parser. Extract structured profile information from the following resume/CV text.
 
@@ -113,7 +114,7 @@ Return the JSON now:`
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 4096,
       temperature: 0,
       messages: [{
@@ -179,7 +180,7 @@ export async function matchJobWithProfile(
     throw new Error('ANTHROPIC_API_KEY not configured')
   }
 
-  const anthropic = new Anthropic({ apiKey })
+  const anthropic = createLLMClient({ apiKey })
 
   const prompt = `You are an expert job matching AI. Analyze how well this candidate's profile matches the job posting.
 
@@ -219,7 +220,7 @@ Return ONLY valid JSON:`
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       temperature: 0.3,
       messages: [{

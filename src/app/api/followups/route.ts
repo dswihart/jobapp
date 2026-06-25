@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const searchParams = request.nextUrl.searchParams
-    const userId = searchParams.get('userId')
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
-      )
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    // Always scope to the authenticated user — never trust a client-supplied id.
+    const userId = session.user.id
 
     const now = new Date()
     const oneDayFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000)
@@ -83,6 +81,11 @@ export async function GET(request: NextRequest) {
 // Mark follow-up as completed
 export async function PATCH(request: NextRequest) {
   try {
+    const session = await auth()
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const body = await request.json()
     const { followUpId, completed } = body
 
@@ -91,6 +94,15 @@ export async function PATCH(request: NextRequest) {
         { error: 'Follow-up ID is required' },
         { status: 400 }
       )
+    }
+
+    // Verify the follow-up belongs to the authenticated user before mutating.
+    const existing = await prisma.followUp.findUnique({
+      where: { id: followUpId },
+      select: { userId: true },
+    })
+    if (!existing || existing.userId !== session.user.id) {
+      return NextResponse.json({ error: 'Follow-up not found' }, { status: 404 })
     }
 
     const followUp = await prisma.followUp.update({

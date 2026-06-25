@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getDailyBuckets } from '@/lib/stats-dates'
 
 export async function GET() {
   try {
@@ -12,69 +13,41 @@ export async function GET() {
       }
     })
 
+    // Bucket by the user's local (Europe/Madrid) calendar days so "today" shows
+    // even while the server's UTC day still lags behind. 16-day window.
     const dailyStats = []
-    const today = new Date()
-    
-    // Get last 30 days
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i)
-      date.setHours(0, 0, 0, 0)
-
-      const nextDate = new Date(date)
-      nextDate.setDate(nextDate.getDate() + 1)
-
-      // Count only APPLIED and INTERVIEWING applications (matching user stats logic)
+    for (const bucket of getDailyBuckets(16)) {
+      // Count strictly by appliedDate (single source of truth shared with the
+      // post-login /stats page). Applications with no appliedDate are not counted.
       const count = await prisma.application.count({
         where: {
-          AND: {
-            OR: [
-              {
-                appliedDate: {
-                  gte: date,
-                  lt: nextDate
-                }
-              },
-              {
-                AND: [
-                  { appliedDate: null },
-                  {
-                    updatedAt: {
-                      gte: date,
-                      lt: nextDate
-                    }
-                  }
-                ]
-              }
-            ]
+          appliedDate: {
+            gte: bucket.start,
+            lt: bucket.end
           }
         }
       })
 
       dailyStats.push({
-        date: date.toISOString().split('T')[0],
-        count: count,
-        dayLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+        date: bucket.dateStr,
+        count,
+        dayLabel: new Date(bucket.dateStr).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' })
       })
     }
 
-    // Interview Statistics
     const now = new Date()
-    
     const totalInterviews = await prisma.interview.count()
-    
     const upcomingInterviews = await prisma.interview.count({
       where: {
         scheduledDate: { gte: now },
         status: { in: ['scheduled', 'rescheduled'] }
       }
     })
-    
     const completedInterviews = await prisma.interview.count({
       where: {
         status: 'completed'
       }
     })
-    
     const interviewOutcomes = await prisma.interview.groupBy({
       by: ['outcome'],
       _count: {
@@ -84,15 +57,13 @@ export async function GET() {
         outcome: { not: null }
       }
     })
-    
-    // Calculate pass rate (passed / (passed + failed))
+
     const passedCount = interviewOutcomes.find(o => o.outcome === 'passed')?._count?.outcome || 0
     const failedCount = interviewOutcomes.find(o => o.outcome === 'failed')?._count?.outcome || 0
-    const passRate = (passedCount + failedCount) > 0 
-      ? Math.round((passedCount / (passedCount + failedCount)) * 100) 
+    const passRate = (passedCount + failedCount) > 0
+      ? Math.round((passedCount / (passedCount + failedCount)) * 100)
       : 0
-    
-    // Interview types breakdown
+
     const interviewTypes = await prisma.interview.groupBy({
       by: ['interviewType'],
       _count: {
@@ -106,12 +77,12 @@ export async function GET() {
         acc[item.status] = item._count.status
         return acc
       }, {} as Record<string, number>),
-      dailyStats: dailyStats,
+      dailyStats,
       interviews: {
         total: totalInterviews,
         upcoming: upcomingInterviews,
         completed: completedInterviews,
-        passRate: passRate,
+        passRate,
         passed: passedCount,
         failed: failedCount,
         byType: interviewTypes.reduce((acc, item) => {

@@ -56,3 +56,16 @@ For questions or issues:
 ---
 
 **Last Updated:** October 20, 2025
+
+## March 2026 Additions
+
+- CODE_REVIEW_ACTIONS_2026-03-07.md - Prioritized remediation checklist from latest code review
+- API_RESPONSE_CONTRACTS.md - API response shape and security contract guidance
+- CURRENT_STATUS_2026-03-07.md - Current repo state, shipped fixes, open risks, and validation status
+
+## Suggested Reading Order
+
+1. CURRENT_STATUS_2026-03-07.md
+2. CODE_REVIEW_ACTIONS_2026-03-07.md
+3. API_RESPONSE_CONTRACTS.md
+4. JOB_TRACKER_DOCUMENTATION.md

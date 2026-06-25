@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createLLMClient } from '@/lib/llm-client'
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import Anthropic from "@anthropic-ai/sdk"
@@ -18,7 +19,7 @@ export async function POST(
     const { id } = await params
 
     // Initialize Anthropic client inside the handler
-    const anthropic = new Anthropic({
+    const anthropic = createLLMClient({
       apiKey: process.env.ANTHROPIC_API_KEY,
     })
 

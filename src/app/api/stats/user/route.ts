@@ -1,16 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { requireAuthenticatedUser } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAuthenticatedUser()
+  if (authResult.response) {
+    return authResult.response
+  }
+
   try {
     const searchParams = request.nextUrl.searchParams
-    const userId = searchParams.get('userId')
+    const requestedUserId = searchParams.get('userId')
+    const userId = requestedUserId || authResult.user.id
 
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID is required' }, { status: 400 })
+    if (userId !== authResult.user.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Get user info including their daily goal
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -25,22 +31,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    const totalApplications = await prisma.application.count({
-      where: { userId }
-    })
-
+    const totalApplications = await prisma.application.count({ where: { userId } })
     const statusCounts = await prisma.application.groupBy({
       where: { userId },
       by: ['status'],
-      _count: {
-        status: true
-      }
+      _count: { status: true }
     })
 
     const dailyStats = []
-    const dailyGoal = user.dailyApplicationGoal || 5 // Default to 5 if not set
-    
-    for (let i = 6; i >= 0; i--) {  // Reverse order for left-to-right chronological display
+    const dailyGoal = user.dailyApplicationGoal || 5
+
+    for (let i = 6; i >= 0; i--) {
       const date = new Date()
       date.setDate(date.getDate() - i)
       date.setHours(0, 0, 0, 0)
@@ -76,13 +77,13 @@ export async function GET(request: NextRequest) {
 
       dailyStats.push({
         date: date.toISOString().split('T')[0],
-        count: count,
+        count,
         goalMet: count >= dailyGoal,
         dayLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
       })
     }
 
-    const stats = {
+    return NextResponse.json({
       user: {
         id: user.id,
         name: user.name,
@@ -94,10 +95,8 @@ export async function GET(request: NextRequest) {
         acc[item.status] = item._count.status
         return acc
       }, {} as Record<string, number>),
-      dailyStats: dailyStats
-    }
-
-    return NextResponse.json(stats)
+      dailyStats
+    })
   } catch (error) {
     console.error('Error fetching user statistics:', error)
     return NextResponse.json(

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { monitorJobBoards } from '@/lib/job-monitor'
+import { sendNewJobsEmail } from '@/lib/email'
+import { syncApplicationEmailsForUser } from '@/lib/email-sync'
 import { prisma } from '@/lib/prisma'
 
 export const maxDuration = 300
@@ -9,7 +11,7 @@ export async function POST(request: NextRequest) {
     // Check for cron secret key
     const cronSecret = request.headers.get('x-cron-secret')
     const expectedSecret = process.env.CRON_SECRET || 'change-this-secret'
-    
+
     if (cronSecret !== expectedSecret) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -17,36 +19,86 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get all users with autoScan enabled
+    // Get all users that need job scans and/or Gmail sync
     const users = await prisma.user.findMany({
       where: {
-        autoScan: true
+        OR: [
+          { autoScan: true },
+          { emailSyncEnabled: true }
+        ]
       },
       select: {
         id: true,
         email: true,
-        name: true
+        name: true,
+        autoScan: true,
+        emailSyncEnabled: true,
       }
     })
 
-    console.log(`[Cron Scan] Found ${users.length} users with autoScan enabled`)
+    console.log(`[Cron Scan] Found ${users.length} users with scan and/or email sync enabled`)
 
     let totalJobs = 0
     const results = []
 
-    // Scan for each user
     for (const user of users) {
       try {
         console.log(`[Cron Scan] Scanning for user: ${user.email}`)
-        const count = await monitorJobBoards(user.id)
-        totalJobs += count
+
+        let count = 0
+        let emailSyncImported = 0
+
+        if (user.autoScan) {
+          // Snapshot job IDs before scan
+          const before = await prisma.jobOpportunity.findMany({
+            where: { userId: user.id },
+            select: { id: true }
+          })
+          const beforeIds = new Set(before.map(j => j.id))
+
+          count = await monitorJobBoards(user.id)
+          totalJobs += count
+
+          // Find newly added jobs
+          if (count > 0 && user.email) {
+            const newJobs = await prisma.jobOpportunity.findMany({
+              where: {
+                userId: user.id,
+                id: { notIn: [...beforeIds] },
+                fitScore: { gt: 50 }
+              },
+              select: {
+                title: true,
+                company: true,
+                location: true,
+                fitScore: true,
+                jobUrl: true,
+                salary: true
+              },
+              orderBy: { fitScore: 'desc' }
+            })
+
+            if (newJobs.length > 0) {
+              await sendNewJobsEmail(process.env.NOTIFY_EMAIL || user.email, newJobs).catch(err =>
+                console.error(`[Cron Scan] Email failed for ${user.email}:`, err)
+              )
+            }
+          }
+        }
+
+        if (user.emailSyncEnabled) {
+          const syncSummary = await syncApplicationEmailsForUser(user.id)
+          emailSyncImported = syncSummary.imported
+        }
+
         results.push({
           userId: user.id,
           email: user.email,
           jobsFound: count,
+          emailSyncImported,
           success: true
         })
-        console.log(`[Cron Scan] Found ${count} new jobs for ${user.email}`)
+        console.log(`[Cron Scan] Processed ${user.email}: jobs=${count}, syncedEmails=${emailSyncImported}`)
       } catch (error) {
         console.error(`[Cron Scan] Error scanning for user ${user.email}:`, error)
         results.push({
@@ -67,9 +119,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('[Cron Scan] Error:', error)
     return NextResponse.json(
-      { 
-        error: 'Cron scan failed', 
-        details: error instanceof Error ? error.message : 'Unknown error' 
+      {
+        error: 'Cron scan failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     )

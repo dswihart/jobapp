@@ -143,6 +143,29 @@ export default function UnifiedNotificationsPanel({ userId }: UnifiedNotificatio
     }
   }
 
+  const clearAllNotifications = async () => {
+    if (!confirm('Clear all notifications?')) return
+
+    try {
+      // Clear all alerts
+      const alertRes = await fetch(`/api/alerts?userId=${userId}`, { method: 'DELETE' })
+      if (alertRes.ok) setAlerts([])
+
+      // Complete all follow-ups
+      for (const fu of [...upcomingFollowUps, ...overdueFollowUps]) {
+        await fetch('/api/followups', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ followUpId: fu.id, completed: true })
+        })
+      }
+      setUpcomingFollowUps([])
+      setOverdueFollowUps([])
+    } catch (error) {
+      console.error('Failed to clear notifications:', error)
+    }
+  }
+
   // Combine all notifications
   const allNotifications: NotificationItem[] = [
     ...alerts.map(alert => ({
@@ -222,11 +245,15 @@ export default function UnifiedNotificationsPanel({ userId }: UnifiedNotificatio
         className="relative p-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
       >
         <BellIcon className="h-6 w-6" />
-        {totalCount > 0 && (
-          <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full">
+        {overdueCount > 0 ? (
+          <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full animate-pulse">
+            {overdueCount > 9 ? '9+' : overdueCount}
+          </span>
+        ) : totalCount > 0 ? (
+          <span className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center bg-blue-500 text-white text-xs font-bold rounded-full">
             {totalCount > 9 ? '9+' : totalCount}
           </span>
-        )}
+        ) : null}
       </button>
 
       {/* Dropdown Panel */}
@@ -288,12 +315,33 @@ export default function UnifiedNotificationsPanel({ userId }: UnifiedNotificatio
                 </button>
               </div>
 
+              {activeTab === 'all' && totalCount > 0 && (
+                <button
+                  onClick={clearAllNotifications}
+                  className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400"
+                >
+                  Clear all
+                </button>
+              )}
               {activeTab === 'jobs' && alerts.length > 0 && (
                 <button
                   onClick={clearAllAlerts}
                   className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400"
                 >
                   Clear all job alerts
+                </button>
+              )}
+              {activeTab === 'tasks' && (upcomingFollowUps.length + overdueFollowUps.length) > 0 && (
+                <button
+                  onClick={async () => {
+                    if (!confirm('Complete all tasks?')) return
+                    for (const fu of [...upcomingFollowUps, ...overdueFollowUps]) {
+                      await markFollowUpComplete(fu.id)
+                    }
+                  }}
+                  className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400"
+                >
+                  Clear all tasks
                 </button>
               )}
             </div>

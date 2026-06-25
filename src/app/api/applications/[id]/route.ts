@@ -14,7 +14,7 @@ export async function GET(
     }
 
     const { id } = await params
-    const application = await prisma.application.findUnique({
+    const application = await prisma.application.findFirst({
       where: {
         id,
         userId: session.user.id
@@ -23,7 +23,6 @@ export async function GET(
         contacts: true,
         resume: true,
         coverLetter: true,
-        user: true
       }
     })
 
@@ -53,7 +52,6 @@ export async function PUT(
     const body = await request.json()
     const { company, role, status, notes, jobUrl, appliedDate, createdAt, resumeId, coverLetterId } = body
 
-    // First verify the application belongs to this user and get current data
     const existing = await prisma.application.findUnique({
       where: { id },
       select: { userId: true, appliedDate: true }
@@ -63,16 +61,12 @@ export async function PUT(
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
 
-    // Automatically set appliedDate when status changes to APPLIED or INTERVIEWING
-    // Only set if not already provided in the request and not already set in database
     let finalAppliedDate = appliedDate ? new Date(appliedDate) : existing.appliedDate
     if ((status === 'APPLIED' || status === 'INTERVIEWING') && !finalAppliedDate) {
       finalAppliedDate = new Date()
     }
 
-    // Prepare update data
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, unknown> = {
       company,
       role,
       status,
@@ -83,12 +77,10 @@ export async function PUT(
       coverLetterId: coverLetterId !== undefined ? (coverLetterId || null) : undefined
     }
 
-    // Only update createdAt if it's provided
     if (createdAt) {
       updateData.createdAt = new Date(createdAt)
     }
 
-    // Remove undefined values
     Object.keys(updateData).forEach(key => {
       if (updateData[key] === undefined) {
         delete updateData[key]
@@ -125,7 +117,6 @@ export async function DELETE(
 
     const { id } = await params
 
-    // First verify the application belongs to this user
     const existing = await prisma.application.findUnique({
       where: { id },
       select: { userId: true }

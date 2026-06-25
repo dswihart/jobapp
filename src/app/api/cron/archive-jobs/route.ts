@@ -4,6 +4,12 @@ import { prisma } from "@/lib/prisma";
 const ARCHIVE_AFTER_DAYS = 30;
 
 export async function GET(request: NextRequest) {
+  const cronSecret = request.headers.get("x-cron-secret")
+  const expectedSecret = process.env.CRON_SECRET || "change-this-secret"
+  if (cronSecret !== expectedSecret) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+
   try {
     const startTime = Date.now();
     console.log(`[${new Date().toISOString()}] Starting automatic archiving process...`);

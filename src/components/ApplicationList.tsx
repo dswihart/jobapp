@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { PencilIcon, TrashIcon, UserPlusIcon, DocumentTextIcon, CalendarIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { PencilIcon, TrashIcon, UserPlusIcon, DocumentTextIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { useToast } from './ToastProvider'
 import ContactModal from './ContactModal'
-import InterviewModal from './InterviewModal'
 
 interface Application {
   id: string
@@ -13,6 +13,11 @@ interface Application {
   notes?: string
   jobUrl?: string
   appliedDate?: string
+  interviewDate?: string | null
+  interviewTime?: string | null
+  interviewType?: string | null
+  interviewRound?: number | null
+  interviewNotes?: string | null
   createdAt: string
   updatedAt: string
   contacts: Contact[]
@@ -58,14 +63,14 @@ const statusLabels = {
 }
 
 export default function ApplicationList({ applications, onEdit, onDelete, onStatusUpdate, onRefresh, userId, onGenerateCoverLetter }: ApplicationListProps) {
+  const toast = useToast()
   const [contactModalOpen, setContactModalOpen] = useState(false)
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null)
-  const [interviewModalOpen, setInterviewModalOpen] = useState(false)
-  const [interviewApplication, setInterviewApplication] = useState<Application | null>(null)
   const [statusFilter, setStatusFilter] = useState<'ALL' | Application['status']>('ALL')
   const [sortField, setSortField] = useState<SortField>('createdAt')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [searchTerm, setSearchTerm] = useState('')
+  const [showArchived2025, setShowArchived2025] = useState(false)
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -97,21 +102,16 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
       const data = await response.json()
 
       if (data.success) {
-        console.log('Contact added successfully')
+        toast.success('Contact added')
         onRefresh() // Refresh applications to show new contact
       } else {
         console.error('Failed to add contact:', data.error)
-        alert('Failed to add contact: ' + data.error)
+        toast.error('Failed to add contact: ' + data.error)
       }
     } catch (error) {
       console.error('Error adding contact:', error)
-      alert('Error adding contact')
+      toast.error('Error adding contact')
     }
-  }
-
-  const handleScheduleInterview = (application: Application) => {
-    setInterviewApplication(application)
-    setInterviewModalOpen(true)
   }
 
   const handleSort = (field: SortField) => {
@@ -134,7 +134,15 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
     )
   }
 
-  const filteredApplications = applications
+  // Separate 2025 archived applications
+  const archived2025 = applications.filter(app =>
+    app.status === 'ARCHIVED' && new Date(app.createdAt).getFullYear() <= 2025
+  )
+  const currentApplications = applications.filter(app =>
+    !(app.status === 'ARCHIVED' && new Date(app.createdAt).getFullYear() <= 2025)
+  )
+
+  const filteredApplications = currentApplications
     .filter(app => statusFilter === 'ALL' || app.status === statusFilter)
     .filter(app => {
       if (!searchTerm) return true
@@ -198,33 +206,33 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
             onChange={(e) => setStatusFilter(e.target.value as 'ALL' | Application['status'])}
             className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500"
           >
-            <option value="ALL">All ({applications.length})</option>
+            <option value="ALL">All ({currentApplications.length})</option>
             <option value="DRAFT">Draft ({applications.filter(a => a.status === 'DRAFT').length})</option>
             <option value="PENDING">Pending ({applications.filter(a => a.status === 'PENDING').length})</option>
             <option value="APPLIED">Applied ({applications.filter(a => a.status === 'APPLIED').length})</option>
             <option value="INTERVIEWING">Interviewing ({applications.filter(a => a.status === 'INTERVIEWING').length})</option>
             <option value="REJECTED">Rejected ({applications.filter(a => a.status === 'REJECTED').length})</option>
-            <option value="ARCHIVED">Archived ({applications.filter(a => a.status === 'ARCHIVED').length})</option>
+            <option value="ARCHIVED">Archived ({currentApplications.filter(a => a.status === 'ARCHIVED').length})</option>
           </select>
           {statusFilter !== 'ALL' && (
             <span className="text-sm text-gray-600 dark:text-gray-400">
-              Showing {sortedApplications.length} of {applications.length} applications
+              Showing {sortedApplications.length} of {currentApplications.length} applications
             </span>
           )}
         </div>
       </div>
       <div className="overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <div className="hidden md:grid md:grid-cols-10 gap-4 text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+          <div className="hidden md:grid md:grid-cols-12 gap-4 text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
             <div
-              className="flex items-center gap-1 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
+              className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
               onClick={() => handleSort('company')}
             >
               Company
               <SortIcon field="company" />
             </div>
             <div
-              className="flex items-center gap-1 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
+              className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-gray-700 dark:hover:text-gray-200"
               onClick={() => handleSort('role')}
             >
               Role
@@ -280,41 +288,20 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                 <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
                   <div>📅 Applied: {application.appliedDate ? formatDate(application.appliedDate) : 'Not set'}</div>
                   <div>🗓️ Created: {formatDate(application.createdAt)}</div>
-                <div className="text-sm">
-                  {application.resume ? (
-                    <a href={application.resume.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block max-w-xs">
-                      {application.resume.name}
-                    </a>
-                  ) : (
-                    <span className="text-gray-400 dark:text-gray-500">-</span>
-                  )}
-                </div>
-                <div className="text-sm">
-                  {application.coverLetter ? (
-                    <a href={application.coverLetter.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block max-w-xs">
-                      {application.coverLetter.name}
-                    </a>
-                  ) : (
-                    <span className="text-gray-400 dark:text-gray-500">-</span>
-                  )}
-                </div>
                   <div>👥 Contacts: {(application.contacts?.length || 0)}</div>
                   {application.resume && (
                     <div>📄 Resume: <a href={application.resume.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">{application.resume.name}</a></div>
                   )}
-                </div>
                   {application.coverLetter && (
                     <div>📧 Cover Letter: <a href={application.coverLetter.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">{application.coverLetter.name}</a></div>
                   )}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <button onClick={() => onEdit(application)} className="flex-1 min-w-[100px] px-3 py-2 bg-blue-600 text-white rounded-lg text-sm">
                     Edit
                   </button>
-                  <button onClick={() => handleScheduleInterview(application)} className="flex-1 min-w-[120px] px-3 py-2 bg-orange-600 text-white rounded-lg text-sm">
-                    Schedule Interview
-                  </button>
-                  <button onClick={() => handleAddContact(application.id)} className="flex-1 min-w-[120px] px-3 py-2 bg-green-600 text-white rounded-lg text-sm">
-                    Add Contact
+                  <button onClick={() => handleAddContact(application.id)} className="px-3 py-2 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 rounded-lg text-sm bg-white dark:bg-gray-800">
+                    Contact
                   </button>
                   {onGenerateCoverLetter && (
                     <button onClick={() => onGenerateCoverLetter(application)} className="flex-1 min-w-[120px] px-3 py-2 bg-purple-600 text-white rounded-lg text-sm">
@@ -327,9 +314,9 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                 </div>
               </div>
 
-              <div className="hidden md:grid md:grid-cols-10 gap-4 items-center">
-                <div className="font-medium text-gray-900 dark:text-white">{application.company}</div>
-                <div className="text-gray-900 dark:text-gray-100">{application.role}</div>
+              <div className="hidden md:grid md:grid-cols-12 gap-4 items-center">
+                <div className="col-span-2 min-w-0 break-words font-medium text-gray-900 dark:text-white">{application.company}</div>
+                <div className="col-span-2 min-w-0 break-words text-gray-900 dark:text-gray-100">{application.role}</div>
                 <div>
                   <select
                     value={application.status}
@@ -368,7 +355,7 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                   )}
                 </div>
                 <div className="text-gray-500 dark:text-gray-400">
-                  {(application.contacts?.length || 0)} contact{(application.contacts?.length || 0) !== 1 ? 's' : ''}
+                  {(application.contacts?.length || 0)}
                 </div>
                 <div className="flex space-x-2">
                   <button
@@ -377,13 +364,6 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                     title="Edit Application"
                   >
                     <PencilIcon className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => handleScheduleInterview(application)}
-                    className="text-orange-600 dark:text-orange-400 hover:text-orange-800 dark:hover:text-orange-300 transition-colors"
-                    title="Schedule Interview"
-                  >
-                    <CalendarIcon className="h-4 w-4" />
                   </button>
                   {onGenerateCoverLetter && (
                     <button
@@ -405,17 +385,20 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                 <div>
                   <button
                     onClick={() => handleAddContact(application.id)}
-                    className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs flex items-center gap-1"
+                    className="px-2.5 py-1 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 bg-white dark:bg-gray-800 rounded-md hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors text-xs flex items-center gap-1"
                   >
                     <UserPlusIcon className="h-3 w-3" />
-                    Add Contact
+                    Contact
                   </button>
                 </div>
               </div>
               {application.notes && (
-                <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                  <strong>Notes:</strong> {application.notes}
-                </div>
+                <details className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  <summary className="cursor-pointer select-none font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                    Notes
+                  </summary>
+                  <p className="mt-1 whitespace-pre-wrap">{application.notes}</p>
+                </details>
               )}
               {application.jobUrl && (
                 <div className="mt-1">
@@ -450,21 +433,61 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
         </div>
       </div>
 
+      
+      {/* Archived 2025 Section */}
+      {archived2025.length > 0 && (
+        <div className="mt-8 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+          <button
+            onClick={() => setShowArchived2025(!showArchived2025)}
+            className="w-full px-6 py-3 bg-gray-100 dark:bg-gray-800 flex items-center justify-between hover:bg-gray-150 dark:hover:bg-gray-750 transition-colors"
+          >
+            <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+              Archived ({archived2025.length})
+            </span>
+            {showArchived2025 ? (
+              <ChevronUpIcon className="h-4 w-4 text-gray-500" />
+            ) : (
+              <ChevronDownIcon className="h-4 w-4 text-gray-500" />
+            )}
+          </button>
+          {showArchived2025 && (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-800">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                  {archived2025.map(app => (
+                    <tr key={app.id} className="opacity-60 hover:opacity-80 transition-opacity">
+                      <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">{app.company}</td>
+                      <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
+                        {app.jobUrl ? (
+                          <a href={app.jobUrl} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">{app.role}</a>
+                        ) : app.role}
+                      </td>
+                      <td className="px-6 py-3 whitespace-nowrap text-sm text-gray-500">{formatDate(app.createdAt)}</td>
+                      <td className="px-6 py-3 whitespace-nowrap">
+                        <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">Archived</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
       <ContactModal
         isOpen={contactModalOpen}
         onClose={() => setContactModalOpen(false)}
         onSave={handleSaveContact}
         applicationId={selectedApplicationId || ''}
-      />
-
-      <InterviewModal
-        isOpen={interviewModalOpen}
-        onClose={() => setInterviewModalOpen(false)}
-        application={interviewApplication}
-        onSuccess={() => {
-          onRefresh()
-          setInterviewModalOpen(false)
-        }}
       />
     </>
   )

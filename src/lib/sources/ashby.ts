@@ -38,11 +38,7 @@ export async function fetchAshby(ctx: AdapterContext): Promise<JobPosting[]> {
   try {
     const data = await fetchJson<AshbyApiResponse>(
       `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(ctx.atsSlug)}?includeCompensation=false`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobBoardName: ctx.atsSlug }),
-      }
+      { method: "GET", headers: { Accept: "application/json" } }
     )
     const jobs = data.jobs || data.postings || []
     if (jobs.length > 0) return jobs.map((j) => normalize(j, ctx))
