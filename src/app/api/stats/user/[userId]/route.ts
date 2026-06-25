@@ -20,6 +20,12 @@ export async function GET(
   try {
     const { userId } = await params
 
+    // Window size for the daily grid (days). Defaults to 16 so callers that don't
+    // pass it (e.g. the login page) are unchanged; the /stats page passes the
+    // selected period (30/90/365). Clamp to a sane range.
+    const daysParam = Number(request.nextUrl.searchParams.get('days'))
+    const days = Number.isFinite(daysParam) && daysParam > 0 ? Math.min(Math.floor(daysParam), 366) : 16
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -56,9 +62,9 @@ export async function GET(
     const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     // Bucket by the user's local (Europe/Madrid) calendar days so "today" shows
-    // even while the server's UTC day still lags behind. 16-day window.
+    // even while the server's UTC day still lags behind. Window = `days`.
     const dailyStats = []
-    for (const bucket of getDailyBuckets(16)) {
+    for (const bucket of getDailyBuckets(days)) {
       // Count strictly by appliedDate (single source of truth shared with the
       // post-login /stats page). Applications with no appliedDate are not counted.
       const count = await prisma.application.count({

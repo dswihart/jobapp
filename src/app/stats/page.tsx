@@ -85,6 +85,17 @@ function getDateString(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+// Map the selected Time Period to the number of days shown in the goal grid.
+// Default (All Time / unrecognized) keeps the focused 16-day recent view.
+function periodToGridDays(period: string): number {
+  switch (period) {
+    case '30days': return 30
+    case '90days': return 90
+    case 'year': return 365
+    default: return 16
+  }
+}
+
 export default function StatsPage() {
   const [stats, setStats] = useState<StatsData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -109,9 +120,10 @@ export default function StatsPage() {
   }, [])
 
   // Build the daily goal grid from the SAME endpoint the before-login page uses
-  // (/api/stats/user/[userId]). This guarantees the post-login stats match the
-  // pre-login stats exactly: same applied-date-only counting, same 16-day window,
-  // and same server-side date bucketing (no client/server timezone drift).
+  // (/api/stats/user/[userId]) so the counting/timezone logic matches exactly.
+  // The window follows the selected Time Period (default 16 days), so picking
+  // "Last 30 Days" shows a 30-day goal grid, etc.
+  const gridDays = periodToGridDays(period)
   useEffect(() => {
     const userId = userData?.id
     if (!userId) return
@@ -120,7 +132,7 @@ export default function StatsPage() {
 
     ;(async () => {
       try {
-        const response = await fetch(`/api/stats/user/${userId}`, { cache: 'no-store' })
+        const response = await fetch(`/api/stats/user/${userId}?days=${gridDays}`, { cache: 'no-store' })
         if (!response.ok) return
         const data = await response.json()
         const dailyStats: Array<{ date: string; count: number }> = Array.isArray(data?.dailyStats) ? data.dailyStats : []
@@ -139,7 +151,7 @@ export default function StatsPage() {
     })()
 
     return () => { cancelled = true }
-  }, [userData])
+  }, [userData, gridDays])
 
   const fetchApplications = async () => {
     try {
@@ -293,12 +305,12 @@ export default function StatsPage() {
             <div className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Last 16 Days</h2>
+                  <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Last {gridDays} Days</h2>
                   <p className="text-xs text-gray-500 dark:text-gray-500">Total applications</p>
                 </div>
                 <div className="text-right">
                   <div className="text-3xl font-bold text-gray-900 dark:text-white">{last14DaysTotal}</div>
-                  <div className="text-xs text-gray-500">/ {dailyGoal * 16} goal</div>
+                  <div className="text-xs text-gray-500">/ {dailyGoal * gridDays} goal</div>
                 </div>
               </div>
             </div>
@@ -307,7 +319,7 @@ export default function StatsPage() {
           {/* 14-day grid */}
           <div className="border-t dark:border-gray-700 p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">
-              Past 16 Days Goal Tracker ({dailyGoal} applications/day)
+              Past {gridDays} Days Goal Tracker ({dailyGoal} applications/day)
             </h3>
             <div className="grid grid-cols-7 gap-2 sm:gap-3 max-w-6xl mx-auto">
               {pastDaysGoals.map((day, index) => {
