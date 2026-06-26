@@ -8,10 +8,20 @@ export default auth((req) => {
   const isOnAuthApi = req.nextUrl.pathname.startsWith("/api/auth")
   const isOnMobileApi = req.nextUrl.pathname.startsWith("/api/mobile")
   const isOnCronApi = req.nextUrl.pathname.startsWith("/api/cron")
-  const isStaticFile = req.nextUrl.pathname.startsWith("/uploads")
+  // Uploaded files (resumes, CVs, cover letters) contain PII and must NOT be
+  // served to anonymous visitors. Previously /uploads bypassed auth here (and the
+  // matcher excluded dotted paths, so .docx files skipped middleware entirely),
+  // leaving them world-readable. Require a valid session; a JSON 401 fits these
+  // file requests better than an HTML login redirect.
+  if (req.nextUrl.pathname.startsWith("/uploads")) {
+    if (!isLoggedIn) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+    return NextResponse.next()
+  }
 
-  // Allow access to auth pages, APIs, cron endpoints, and static uploads
-  if (isOnLoginPage || isOnRegisterPage || isOnAuthApi || isOnMobileApi || isOnCronApi || isStaticFile) {
+  // Allow access to auth pages and unauthenticated-by-design APIs.
+  if (isOnLoginPage || isOnRegisterPage || isOnAuthApi || isOnMobileApi || isOnCronApi) {
     return NextResponse.next()
   }
 
@@ -24,5 +34,11 @@ export default auth((req) => {
 })
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\..*).*)"],
+  // First entry keeps the original app-route coverage (excludes static assets and
+  // any dotted path). Second entry explicitly covers /uploads so PII files — which
+  // have extensions like .docx — are intercepted and auth-gated.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\..*).*)",
+    "/uploads/:path*",
+  ],
 }
