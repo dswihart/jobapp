@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { PencilIcon, TrashIcon, UserPlusIcon, DocumentTextIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { PencilIcon, TrashIcon, UserPlusIcon, DocumentTextIcon, ChevronUpIcon, ChevronDownIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { useToast } from './ToastProvider'
 import ContactModal from './ContactModal'
 
@@ -290,7 +290,7 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                   <div>🗓️ Created: {formatDate(application.createdAt)}</div>
                   <div>👥 Contacts: {(application.contacts?.length || 0)}</div>
                   {application.resume && (
-                    <div>📄 Resume: <a href={application.resume.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">{application.resume.name}</a></div>
+                    <div className="flex items-center gap-1">📄 Resume: <a href={`/api/resumes/${application.resume.id}/download`} download className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1" title={`Download ${application.resume.fileName}`}><ArrowDownTrayIcon className="h-3.5 w-3.5" />{application.resume.name}</a></div>
                   )}
                   {application.coverLetter && (
                     <div>📧 Cover Letter: <a href={application.coverLetter.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline">{application.coverLetter.name}</a></div>
@@ -338,8 +338,9 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                 </div>
                 <div className="text-sm">
                   {application.resume ? (
-                    <a href={application.resume.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline truncate block max-w-xs">
-                      {application.resume.name}
+                    <a href={`/api/resumes/${application.resume.id}/download`} download className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1 max-w-xs" title={`Download ${application.resume.fileName}`}>
+                      <ArrowDownTrayIcon className="h-4 w-4 flex-shrink-0" />
+                      <span className="truncate">{application.resume.name}</span>
                     </a>
                   ) : (
                     <span className="text-gray-400 dark:text-gray-500">-</span>
