@@ -17,6 +17,15 @@ export default auth((req) => {
     if (!isLoggedIn) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
+    // Per-user ownership: uploaded files are stored as `${userId}-${uuid}-name`,
+    // so a signed-in user may only fetch files whose name begins with their own
+    // id. Prevents one authenticated user from reading another user's PII by URL.
+    // The trailing "-" stops shorter ids from matching a longer id's files.
+    const userId = req.auth?.user?.id
+    const fileName = req.nextUrl.pathname.split("/").pop() || ""
+    if (!userId || !fileName.startsWith(`${userId}-`)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
     return NextResponse.next()
   }
 
