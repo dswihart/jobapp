@@ -113,9 +113,24 @@ Your response must be valid JSON with the following structure:
 
 IMPORTANT: Respond ONLY with valid JSON, no additional text or markdown.`
 
+    // Cap the transcript sent to the model. Very large transcripts (e.g. 250k+
+    // chars) make the AI call slow enough to exceed the HTTP timeout — the
+    // backend still finishes and saves, but the browser shows "Error analyzing
+    // transcript". Capping keeps the call fast and cheaper while preserving more
+    // than enough content for a thorough analysis.
+    const MAX_TRANSCRIPT_CHARS = 60000
+    const transcriptForAi =
+      interview.transcript.length > MAX_TRANSCRIPT_CHARS
+        ? interview.transcript.slice(0, MAX_TRANSCRIPT_CHARS) +
+          "\n\n[...transcript truncated for analysis — only the first portion was analyzed...]"
+        : interview.transcript
+
     // Call Anthropic Claude for analysis
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      // Was "claude-sonnet-4-20250514" — that model has been retired and now 404s
+      // ("not_found_error"), which surfaced as "Failed to analyze interview".
+      // Use the app's standard current model (routed via OpenRouter, Anthropic fallback).
+      model: "claude-sonnet-4-5",
       max_tokens: 4000,
       messages: [
         {
@@ -126,7 +141,7 @@ Context:
 ${context}
 
 Transcript:
-${interview.transcript}
+${transcriptForAi}
 
 Remember to respond with ONLY valid JSON matching the schema provided.`
         }

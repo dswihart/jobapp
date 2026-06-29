@@ -35,6 +35,20 @@ export async function fetchFromExaDiscovery(userId: string): Promise<JobPosting[
     return []
   }
 
+  // Cost control: the scan cron runs hourly, but Exa (paid, ~$0.20/run) rarely
+  // surfaces genuinely-new jobs within a single hour. Only run discovery every
+  // EXA_INTERVAL_HOURS (default 3), keyed off the wall-clock hour, so the free
+  // sources keep scanning hourly while Exa spend drops ~3x. Set EXA_INTERVAL_HOURS=1
+  // to restore hourly Exa.
+  const intervalHours = Math.max(1, parseInt(process.env.EXA_INTERVAL_HOURS || "3", 10) || 3)
+  const hour = new Date().getUTCHours()
+  if (hour % intervalHours !== 0) {
+    console.log(
+      `[Exa Discovery] Skipped (runs every ${intervalHours}h for cost control; current hour=${hour})`
+    )
+    return []
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
