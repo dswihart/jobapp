@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       FROM interviews i
       LEFT JOIN applications a ON a.id = i.application_id
       WHERE a."userId" = ${user.id}
-        AND i.status = 'scheduled'
+        AND i.status IN ('scheduled', 'rescheduled')
         AND i.reminder_sent_at IS NULL
         AND i.scheduled_date >= ${now}
         AND i.scheduled_date <= ${in24h}

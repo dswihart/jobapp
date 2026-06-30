@@ -13,11 +13,6 @@ interface Application {
   notes?: string
   jobUrl?: string
   appliedDate?: string
-  interviewDate?: string | null
-  interviewTime?: string | null
-  interviewType?: string | null
-  interviewRound?: number | null
-  interviewNotes?: string | null
   createdAt: string
   updatedAt: string
   contacts: Contact[]

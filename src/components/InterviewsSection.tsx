@@ -85,9 +85,9 @@ export default function InterviewsSection({
       const params = new URLSearchParams()
       if (filter === 'upcoming') {
         params.set('upcoming', 'true')
-      } else if (filter === 'completed') {
-        params.set('status', 'completed')
       }
+      // 'Past' tab fetches all interviews and buckets client-side, so a
+      // past-dated interview that was never marked 'completed' still shows.
 
       const response = await fetch('/api/interviews?' + params.toString(), { cache: 'no-store' })
       const data = await response.json()

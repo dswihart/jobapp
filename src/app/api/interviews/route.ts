@@ -36,7 +36,12 @@ export async function GET(request: NextRequest) {
     })
 
     const applicationIds = userApplications.map(app => app.id)
-    whereClause.applicationId = applicationId || { in: applicationIds }
+    // IDOR guard: only honor a client-supplied applicationId when it belongs
+    // to this user; otherwise scope to all of the user's applications.
+    whereClause.applicationId =
+      applicationId && applicationIds.includes(applicationId)
+        ? applicationId
+        : { in: applicationIds }
 
     const interviews = await prisma.interview.findMany({
       where: whereClause,
