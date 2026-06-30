@@ -118,6 +118,7 @@ export async function PATCH(
     if (data.autoDetected !== undefined) {
       updateData.autoDetected = Boolean(data.autoDetected)
     }
+    if (data.archived !== undefined) updateData.archived = Boolean(data.archived)
     // Clear the reminder-suppression stamp (so the cron can email about this
     // interview) ONLY on a real change: confirming an auto-detected interview, or
     // an actual reschedule (date/status change). Doing it on every save — e.g.

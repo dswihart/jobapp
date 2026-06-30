@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { PencilIcon, TrashIcon, UserPlusIcon, DocumentTextIcon, ChevronUpIcon, ChevronDownIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { useToast } from './ToastProvider'
 import ContactModal from './ContactModal'
@@ -267,7 +268,7 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
               <div className="md:hidden space-y-3 border-b border-gray-200 dark:border-gray-700 pb-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <div className="font-bold text-gray-900 dark:text-white text-lg">{application.company}</div>
+                    <Link href={`/applications/${application.id}`} className="font-bold text-gray-900 dark:text-white text-lg hover:text-blue-600 dark:hover:text-blue-400 hover:underline">{application.company}</Link>
                     <div className="text-gray-700 dark:text-gray-300">{application.role}</div>
                   </div>
                   <select
@@ -310,7 +311,7 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
               </div>
 
               <div className="hidden md:grid md:grid-cols-12 gap-4 items-center">
-                <div className="col-span-2 min-w-0 break-words font-medium text-gray-900 dark:text-white">{application.company}</div>
+                <div className="col-span-2 min-w-0 break-words font-medium text-gray-900 dark:text-white"><Link href={`/applications/${application.id}`} className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline">{application.company}</Link></div>
                 <div className="col-span-2 min-w-0 break-words text-gray-900 dark:text-gray-100">{application.role}</div>
                 <div>
                   <select

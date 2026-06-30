@@ -23,6 +23,7 @@ export async function GET(
         contacts: true,
         resume: true,
         coverLetter: true,
+        interviews: { orderBy: { scheduledDate: 'desc' } },
       }
     })
 

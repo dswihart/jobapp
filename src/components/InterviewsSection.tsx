@@ -17,8 +17,12 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ExclamationTriangleIcon,
+  ArchiveBoxIcon,
+  ArrowUturnLeftIcon,
+  ArrowTopRightOnSquareIcon,
 } from '@heroicons/react/24/outline'
 import SummaryEmailButton from './SummaryEmailButton'
+import Link from 'next/link'
 
 interface Interviewer {
   id: string
@@ -54,12 +58,14 @@ interface Interview {
   analyzedAt?: string
   companyFeedback?: string
   autoDetected?: boolean
+  archived?: boolean
   interviewers: Interviewer[]
   application?: {
     id: string
     company: string
     role: string
     status: string
+    jobUrl?: string
   }
 }
 
@@ -76,7 +82,7 @@ export default function InterviewsSection({
 }: InterviewsSectionProps) {
   const [interviews, setInterviews] = useState<Interview[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed'>('all')
+  const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed' | 'archived'>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const fetchInterviews = useCallback(async () => {
@@ -131,6 +137,19 @@ export default function InterviewsSection({
       fetchInterviews()
     } catch (error) {
       console.error('Error confirming interview:', error)
+    }
+  }
+
+  const archiveInterview = async (interviewId: string, archived: boolean) => {
+    try {
+      await fetch('/api/interviews/' + interviewId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived }),
+      })
+      fetchInterviews()
+    } catch (error) {
+      console.error('Error archiving interview:', error)
     }
   }
 
@@ -189,11 +208,14 @@ export default function InterviewsSection({
     ['scheduled', 'rescheduled'].includes(i.status)
   const isOpenUpcoming = (i: Interview) => needsScheduling(i) || isUpcomingDated(i)
 
-  const upcomingInterviews = interviews.filter(isOpenUpcoming)
-  const pastInterviews = interviews.filter(i => !isOpenUpcoming(i))
+  const upcomingInterviews = interviews.filter(i => !i.archived && isOpenUpcoming(i))
+  const pastInterviews = interviews.filter(i => !i.archived && !isOpenUpcoming(i))
+  const archivedInterviews = interviews.filter(i => i.archived)
 
   const displayInterviews = filter === 'upcoming' ? upcomingInterviews :
-                           filter === 'completed' ? pastInterviews : interviews
+                           filter === 'completed' ? pastInterviews :
+                           filter === 'archived' ? archivedInterviews :
+                           interviews.filter(i => !i.archived)
 
   if (loading) {
     return (
@@ -234,7 +256,7 @@ export default function InterviewsSection({
         </div>
 
         <div className="flex gap-2">
-          {(['all', 'upcoming', 'completed'] as const).map((f) => (
+          {(['all', 'upcoming', 'completed', 'archived'] as const).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -244,7 +266,7 @@ export default function InterviewsSection({
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
               }`}
             >
-              {f === 'all' ? 'All' : f === 'upcoming' ? 'Upcoming' : 'Past'}
+              {f === 'all' ? 'All' : f === 'upcoming' ? 'Upcoming' : f === 'completed' ? 'Past' : 'Archived'}
               {f === 'upcoming' && upcomingInterviews.length > 0 && (
                 <span className="ml-2 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">
                   {upcomingInterviews.length}
@@ -273,13 +295,28 @@ export default function InterviewsSection({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <BuildingOfficeIcon className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium text-gray-900 dark:text-white">
+                    <Link
+                      href={`/applications/${interview.applicationId}`}
+                      className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
+                    >
                       {interview.application?.company || 'Unknown Company'}
-                    </span>
+                    </Link>
                     <span className="text-gray-400">•</span>
                     <span className="text-gray-600 dark:text-gray-300">
                       {interview.application?.role || 'Unknown Role'}
                     </span>
+                    {interview.application?.jobUrl && (
+                      <a
+                        href={interview.application.jobUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="Open original job posting"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                      >
+                        <ArrowTopRightOnSquareIcon className="h-4 w-4" />
+                      </a>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
@@ -318,6 +355,17 @@ export default function InterviewsSection({
                   {interview.aiAnalysis && (
                     <SparklesIcon className="h-5 w-5 text-purple-500" title="AI Analysis Available" />
                   )}
+                  <button
+                    onClick={() => archiveInterview(interview.id, !interview.archived)}
+                    title={interview.archived ? 'Unarchive' : 'Archive'}
+                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                  >
+                    {interview.archived ? (
+                      <ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <ArchiveBoxIcon className="h-5 w-5 text-gray-400" />
+                    )}
+                  </button>
                   <button
                     onClick={() => setExpandedId(expandedId === interview.id ? null : interview.id)}
                     className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"

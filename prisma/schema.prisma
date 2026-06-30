@@ -503,6 +503,7 @@ model Interview {
   // Provenance — true when created automatically from a detected email and
   // awaiting the user's confirmation (reminders are suppressed until confirmed).
   autoDetected    Boolean  @default(false) @map("auto_detected")
+  archived        Boolean  @default(false) @map("archived")
 
   // Feedback received
   companyFeedback String?  @map("company_feedback") @db.Text

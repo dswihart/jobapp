@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       where: whereClause,
       include: {
         interviewers: true,
-        application: { select: { id: true, company: true, role: true, status: true } },
+        application: { select: { id: true, company: true, role: true, status: true, jobUrl: true } },
       },
       orderBy: { scheduledDate: "desc" },
     })

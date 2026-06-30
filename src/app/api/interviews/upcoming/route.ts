@@ -102,6 +102,7 @@ export async function GET(request: NextRequest) {
 
     const upcoming = interviews
       .filter((interview) =>
+        !interview.archived &&
         interview.scheduledDate != null &&
         getInterviewBoundary(interview.scheduledDate, interview.scheduledTime) >= now &&
         (
@@ -137,6 +138,7 @@ export async function GET(request: NextRequest) {
 
     const needsFollowUp = interviews
       .filter((interview) =>
+        !interview.archived &&
         interview.scheduledDate != null &&
         getInterviewBoundary(interview.scheduledDate, interview.scheduledTime) >= recentPastStart &&
         getInterviewBoundary(interview.scheduledDate, interview.scheduledTime) < now &&
