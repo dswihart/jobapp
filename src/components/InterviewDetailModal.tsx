@@ -199,9 +199,9 @@ export default function InterviewDetailModal({
           status: nextStatus,
           outcome: formData.outcome || null,
           preparationNotes: formData.preparationNotes || null,
-          postInterviewNotes: formData.postInterviewNotes || null,
+          postInterviewNotes: null,
           transcript: formData.transcript || null,
-          companyFeedback: formData.companyFeedback || null,
+          companyFeedback: null,
           // Saving an auto-detected interview that now has a date confirms it
           // (clears the reminder-suppression stamp). With no date we keep it
           // auto-detected so the "add the date, then confirm" prompt stays.
@@ -573,42 +573,14 @@ export default function InterviewDetailModal({
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Preparation Notes
+                    Notes
                   </label>
                   <textarea
                     value={formData.preparationNotes}
                     onChange={(e) => setFormData({ ...formData, preparationNotes: e.target.value })}
                     disabled={!editMode}
-                    rows={4}
-                    placeholder="Topics to prepare, questions to ask, research notes..."
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-60 resize-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Post-Interview Notes
-                  </label>
-                  <textarea
-                    value={formData.postInterviewNotes}
-                    onChange={(e) => setFormData({ ...formData, postInterviewNotes: e.target.value })}
-                    disabled={!editMode}
-                    rows={4}
-                    placeholder="How it went, key moments, impressions..."
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-60 resize-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Company Feedback
-                  </label>
-                  <textarea
-                    value={formData.companyFeedback}
-                    onChange={(e) => setFormData({ ...formData, companyFeedback: e.target.value })}
-                    disabled={!editMode}
-                    rows={3}
-                    placeholder="Feedback received from the company..."
+                    rows={6}
+                    placeholder="Prep, how it went, company feedback — anything about this interview…"
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-60 resize-none"
                   />
                 </div>
