@@ -51,12 +51,24 @@ export async function POST(request: NextRequest) {
     // Calculate fit score if we have user skills and job description
     if (user?.skills && description) {
       try {
-        const jobFit = await analyzeJobFitEnhanced({
-          role,
-          company,
-          description: description || '',
-          requirements: requirements || ''
-        }, user)
+        const jobFit = await analyzeJobFitEnhanced(
+          {
+            primarySkills: (user.primarySkills || user.skills) as string[],
+            secondarySkills: (user.secondarySkills || []) as string[],
+            learningSkills: (user.learningSkills || []) as string[],
+            yearsOfExperience: user.yearsOfExperience || parseInt(user.experience?.replace(/\D/g, '') || '0'),
+            seniorityLevel: user.seniorityLevel || undefined,
+            workHistory: (user.workHistory as Array<{ company: string; role: string; duration: string; achievements: string[] }>) || [],
+            jobTitles: (user.jobTitles || []) as string[],
+            industries: (user.industries || []) as string[],
+            summary: user.summary || undefined,
+            workPreference: user.workPreference || undefined,
+            preferredCountries: (user.preferredCountries || []) as string[],
+            salaryExpectation: user.salaryExpectation || undefined,
+          },
+          { title: role, company, description: description || '', requirements: requirements || '' },
+          session.user.id as string
+        )
 
         fitScore = jobFit.overall
         extractedSkills = jobFit.matchedSkills || []

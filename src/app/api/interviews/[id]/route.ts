@@ -117,7 +117,19 @@ export async function PATCH(
     // reminder cron will email about it once (when it enters the 24h window).
     if (data.autoDetected !== undefined) {
       updateData.autoDetected = Boolean(data.autoDetected)
-      if (data.autoDetected === false) updateData.reminderSentAt = null
+    }
+    // Clear the reminder-suppression stamp (so the cron can email about this
+    // interview) ONLY on a real change: confirming an auto-detected interview, or
+    // an actual reschedule (date/status change). Doing it on every save — e.g.
+    // editing prep notes while inside the 24h window — re-armed and re-sent the
+    // reminder each hour (the 2026-06-22 spam class).
+    const confirming = data.autoDetected === false && existingInterview.autoDetected === true
+    const newDateMs = updateData.scheduledDate instanceof Date ? updateData.scheduledDate.getTime() : null
+    const oldDateMs = existingInterview.scheduledDate ? existingInterview.scheduledDate.getTime() : null
+    const dateChanged = data.scheduledDate !== undefined && newDateMs !== oldDateMs
+    const statusChanged = data.status !== undefined && data.status !== existingInterview.status
+    if (confirming || dateChanged || statusChanged) {
+      updateData.reminderSentAt = null
     }
 
     // Update the interview

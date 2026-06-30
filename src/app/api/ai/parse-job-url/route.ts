@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       })
       
       // Wait for content to load
-      await page.waitForTimeout(2000)
+      await new Promise((resolve) => setTimeout(resolve, 2000))
       
       // Get the rendered HTML
       html = await page.content()

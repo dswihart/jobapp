@@ -119,6 +119,10 @@ export async function monitorJobBoards(userId: string): Promise<number> {
       maxJobAgeDays: true,
       notificationThreshold: true,
       preferredCountries: true,
+      learningSkills: true,
+      workHistory: true,
+      industries: true,
+      salaryExpectation: true,
     }
   })
 
@@ -263,12 +267,10 @@ export async function monitorJobBoards(userId: string): Promise<number> {
       `
       if (cached.length > 0) {
         console.log(`[Job Monitor] Cache HIT: ${job.title} (cached score: ${cached[0].score})`)
-        // Refresh scored_at so listings that keep appearing in scan results stay
-        // cached instead of being re-scored every time the TTL expires
-        await prisma.$executeRaw`
-          UPDATE scored_jobs_cache SET scored_at = NOW()
-          WHERE user_id = ${userId} AND job_hash = ${jobHash}
-        `.catch((e: unknown) => console.error('[Job Monitor] Cache refresh error:', e))
+        // Do NOT refresh scored_at on hit — let entries age out after the 7-day
+        // TTL so recurring listings get re-scored against the CURRENT profile /
+        // minFitScore. (Refreshing kept a job that scored below an old, higher
+        // threshold cached forever, so it stayed hidden even after lowering it.)
         if (cached[0].score < minFitScore) continue
         // If cached score was above threshold, the job was already added previously — skip
         continue
