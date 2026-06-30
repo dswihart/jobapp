@@ -234,6 +234,10 @@ export default function AppShell() {
             onDelete={handleDeleteApplication}
             onStatusUpdate={handleStatusUpdate}
             onRefresh={fetchApplications}
+            onAddInterview={(applicationId) => {
+              setPreselectedAppId(applicationId)
+              setCreateInterviewOpen(true)
+            }}
             userId={user?.id || ''}
           />
         )

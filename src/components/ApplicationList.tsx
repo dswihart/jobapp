@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { PencilIcon, TrashIcon, UserPlusIcon, DocumentTextIcon, ChevronUpIcon, ChevronDownIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { PencilIcon, TrashIcon, UserPlusIcon, DocumentTextIcon, ChevronUpIcon, ChevronDownIcon, ArrowDownTrayIcon, CalendarIcon } from '@heroicons/react/24/outline'
 import { useToast } from './ToastProvider'
 import ContactModal from './ContactModal'
 
@@ -37,6 +37,7 @@ interface ApplicationListProps {
   onStatusUpdate: (id: string, status: Application['status']) => void
   onRefresh: () => void
   onGenerateCoverLetter?: (application: Application) => void
+  onAddInterview?: (applicationId: string) => void
   userId: string
 }
 
@@ -58,7 +59,7 @@ const statusLabels = {
   REJECTED: 'Rejected'
 }
 
-export default function ApplicationList({ applications, onEdit, onDelete, onStatusUpdate, onRefresh, userId, onGenerateCoverLetter }: ApplicationListProps) {
+export default function ApplicationList({ applications, onEdit, onDelete, onStatusUpdate, onRefresh, userId, onGenerateCoverLetter, onAddInterview }: ApplicationListProps) {
   const toast = useToast()
   const [contactModalOpen, setContactModalOpen] = useState(false)
   const [selectedApplicationId, setSelectedApplicationId] = useState<string | null>(null)
@@ -296,6 +297,11 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                   <button onClick={() => onEdit(application)} className="flex-1 min-w-[100px] px-3 py-2 bg-blue-600 text-white rounded-lg text-sm">
                     Edit
                   </button>
+                  {onAddInterview && (
+                    <button onClick={() => onAddInterview(application.id)} className="px-3 py-2 border border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-300 rounded-lg text-sm bg-white dark:bg-gray-800">
+                      + Interview
+                    </button>
+                  )}
                   <button onClick={() => handleAddContact(application.id)} className="px-3 py-2 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 rounded-lg text-sm bg-white dark:bg-gray-800">
                     Contact
                   </button>
@@ -362,6 +368,15 @@ export default function ApplicationList({ applications, onEdit, onDelete, onStat
                   >
                     <PencilIcon className="h-4 w-4" />
                   </button>
+                  {onAddInterview && (
+                    <button
+                      onClick={() => onAddInterview(application.id)}
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+                      title="Add Interview"
+                    >
+                      <CalendarIcon className="h-4 w-4" />
+                    </button>
+                  )}
                   {onGenerateCoverLetter && (
                     <button
                       onClick={() => onGenerateCoverLetter(application)}
