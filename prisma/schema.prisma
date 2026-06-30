@@ -471,7 +471,7 @@ model Interview {
   applicationId   String   @map("application_id")
   
   // Interview timing
-  scheduledDate   DateTime @map("scheduled_date")
+  scheduledDate   DateTime? @map("scheduled_date")
   scheduledTime   String?  @map("scheduled_time")
   duration        Int?     // Duration in minutes
   actualDate      DateTime? @map("actual_date") // When it actually happened

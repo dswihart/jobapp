@@ -548,37 +548,47 @@ export async function syncApplicationEmailsForUser(
         // autoDetected (needs the user's confirmation) and have reminderSentAt
         // pre-stamped so the reminder cron stays silent until the user confirms.
         if (classification === 'INTERVIEW' && matched && verdict.confidence >= 60) {
+          // Create the interview even when the email has no concrete date yet
+          // (the common "let's find a time" / Calendly invite). Dated email ->
+          // status 'scheduled'; dateless -> 'needs_scheduling' with a null date
+          // for the user to fill in. Dedup only against OPEN interviews (ignore
+          // cancelled/completed): dated detection within +/-2 days; dateless
+          // against any open interview already tracked for the application.
           const scheduledDate = buildInterviewDate(verdict.interviewDate, verdict.interviewTime)
-          if (scheduledDate) {
-            const windowMs = 2 * 24 * 60 * 60 * 1000
-            const existingInterview = await prisma.interview.findFirst({
-              where: {
-                applicationId: matched.id,
-                scheduledDate: {
-                  gte: new Date(scheduledDate.getTime() - windowMs),
-                  lte: new Date(scheduledDate.getTime() + windowMs),
-                },
-              },
-              select: { id: true },
-            })
+          const windowMs = 2 * 24 * 60 * 60 * 1000
+          const openStatuses = ['scheduled', 'rescheduled', 'needs_scheduling']
+          const existingInterview = await prisma.interview.findFirst({
+            where: {
+              applicationId: matched.id,
+              status: { in: openStatuses },
+              ...(scheduledDate
+                ? {
+                    scheduledDate: {
+                      gte: new Date(scheduledDate.getTime() - windowMs),
+                      lte: new Date(scheduledDate.getTime() + windowMs),
+                    },
+                  }
+                : {}),
+            },
+            select: { id: true },
+          })
 
-            if (!existingInterview) {
-              await prisma.interview.create({
-                data: {
-                  applicationId: matched.id,
-                  scheduledDate,
-                  scheduledTime: verdict.interviewTime,
-                  interviewType: 'video',
-                  round: 1,
-                  status: 'scheduled',
-                  autoDetected: true,
-                  reminderSentAt: new Date(), // suppress reminders until confirmed
-                  preparationNotes: `Auto-detected from email (${cand.receivedAt.toISOString().slice(0, 10)}): ${subject}`.slice(0, 500),
-                },
-              })
-              summary.createdInterviews++
-              console.log(`[Email Sync] Auto-created interview for "${matched.company}" on ${scheduledDate.toISOString().slice(0, 10)} (pending user confirmation).`)
-            }
+          if (!existingInterview) {
+            await prisma.interview.create({
+              data: {
+                applicationId: matched.id,
+                scheduledDate,
+                scheduledTime: scheduledDate ? verdict.interviewTime : null,
+                interviewType: 'video',
+                round: 1,
+                status: scheduledDate ? 'scheduled' : 'needs_scheduling',
+                autoDetected: true,
+                reminderSentAt: new Date(), // suppress reminders until confirmed
+                preparationNotes: `Auto-detected from email (${cand.receivedAt.toISOString().slice(0, 10)}): ${subject}`.slice(0, 500),
+              },
+            })
+            summary.createdInterviews++
+            console.log(`[Email Sync] Auto-created ${scheduledDate ? 'interview' : 'needs-scheduling interview'} for "${matched.company}"${scheduledDate ? ` on ${scheduledDate.toISOString().slice(0, 10)}` : ' (date TBD)'} (pending user confirmation).`)
           }
         }
       }

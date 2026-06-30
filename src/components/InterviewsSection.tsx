@@ -35,7 +35,7 @@ interface Interviewer {
 interface Interview {
   id: string
   applicationId: string
-  scheduledDate: string
+  scheduledDate: string | null
   scheduledTime?: string
   duration?: number
   actualDate?: string
@@ -168,7 +168,8 @@ export default function InterviewsSection({
     }
   }
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Date TBD'
     const date = new Date(dateString)
     return date.toLocaleDateString('en-US', {
       weekday: 'short',
@@ -178,16 +179,18 @@ export default function InterviewsSection({
     })
   }
 
-  const isUpcoming = (dateString: string) => {
-    return new Date(dateString) > new Date()
-  }
+  // A date-TBD interview (needs_scheduling or null date) is OPEN: shown in
+  // Upcoming so the user can schedule/confirm it, never bucketed as Past.
+  const needsScheduling = (i: Interview) =>
+    (i.status === 'needs_scheduling' || !i.scheduledDate) &&
+    i.status !== 'completed' && i.status !== 'cancelled'
+  const isUpcomingDated = (i: Interview) =>
+    !!i.scheduledDate && new Date(i.scheduledDate) > new Date() &&
+    ['scheduled', 'rescheduled'].includes(i.status)
+  const isOpenUpcoming = (i: Interview) => needsScheduling(i) || isUpcomingDated(i)
 
-  const upcomingInterviews = interviews.filter(i =>
-    isUpcoming(i.scheduledDate) && ['scheduled', 'rescheduled'].includes(i.status)
-  )
-  const pastInterviews = interviews.filter(i =>
-    !isUpcoming(i.scheduledDate) || !['scheduled', 'rescheduled'].includes(i.status)
-  )
+  const upcomingInterviews = interviews.filter(isOpenUpcoming)
+  const pastInterviews = interviews.filter(i => !isOpenUpcoming(i))
 
   const displayInterviews = filter === 'upcoming' ? upcomingInterviews :
                            filter === 'completed' ? pastInterviews : interviews
@@ -310,7 +313,7 @@ export default function InterviewsSection({
                 <div className="flex items-center gap-3">
                   {getOutcomeIcon(interview.outcome || undefined)}
                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
-                    {interview.status}
+                    {interview.status.replace(/_/g, ' ')}
                   </span>
                   {interview.aiAnalysis && (
                     <SparklesIcon className="h-5 w-5 text-purple-500" title="AI Analysis Available" />
@@ -332,7 +335,9 @@ export default function InterviewsSection({
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
                   <span className="flex items-center gap-1.5 text-sm text-amber-800 dark:text-amber-300">
                     <SparklesIcon className="h-4 w-4" />
-                    Auto-detected from your email — review the date/time, then confirm.
+                    {interview.scheduledDate
+                      ? 'Auto-detected from your email — review the date/time, then confirm.'
+                      : 'Auto-detected from your email — add the date, then confirm.'}
                   </span>
                   <div className="flex items-center gap-2">
                     <button

@@ -70,8 +70,8 @@ export async function POST() {
     // "Done" = already happened in the last 14 days and not cancelled (covers
     // past interviews whether or not the user marked them completed).
     const completedInterviews = interviews
-      .filter(i => i.status !== 'cancelled' && i.scheduledDate <= now && i.scheduledDate >= rangeStart)
-      .sort((a, b) => b.scheduledDate.getTime() - a.scheduledDate.getTime())
+      .filter(i => i.status !== 'cancelled' && i.scheduledDate != null && i.scheduledDate <= now && i.scheduledDate >= rangeStart)
+      .sort((a, b) => (b.scheduledDate?.getTime() ?? 0) - (a.scheduledDate?.getTime() ?? 0))
       .map(i => {
         const app = appById.get(i.applicationId)
         return {
@@ -86,7 +86,7 @@ export async function POST() {
 
     // Upcoming = scheduled/rescheduled in the next 14 days.
     const upcomingInterviews = interviews
-      .filter(i => ['scheduled', 'rescheduled'].includes(i.status) && i.scheduledDate > now && i.scheduledDate <= rangeAhead)
+      .filter(i => ['scheduled', 'rescheduled'].includes(i.status) && i.scheduledDate != null && i.scheduledDate > now && i.scheduledDate <= rangeAhead)
       .map(i => {
         const app = appById.get(i.applicationId)
         return {
@@ -123,9 +123,9 @@ export async function POST() {
       const liveAppIds = new Set<string>()
       for (const i of interviews) {
         const upcoming =
-          ['scheduled', 'rescheduled'].includes(i.status) && i.scheduledDate > now && i.scheduledDate <= endDate
+          ['scheduled', 'rescheduled'].includes(i.status) && i.scheduledDate != null && i.scheduledDate > now && i.scheduledDate <= endDate
         const recentlyActive =
-          i.scheduledDate <= now && i.scheduledDate >= recentCutoff && !dead.includes(i.status) && i.outcome !== 'failed'
+          i.scheduledDate != null && i.scheduledDate <= now && i.scheduledDate >= recentCutoff && !dead.includes(i.status) && i.outcome !== 'failed'
         if (upcoming || recentlyActive) liveAppIds.add(i.applicationId)
       }
       const liveProcesses = liveAppIds.size

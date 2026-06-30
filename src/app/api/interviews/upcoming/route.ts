@@ -102,6 +102,7 @@ export async function GET(request: NextRequest) {
 
     const upcoming = interviews
       .filter((interview) =>
+        interview.scheduledDate != null &&
         getInterviewBoundary(interview.scheduledDate, interview.scheduledTime) >= now &&
         (
           scope === 'calendar-two-weeks'
@@ -136,11 +137,12 @@ export async function GET(request: NextRequest) {
 
     const needsFollowUp = interviews
       .filter((interview) =>
+        interview.scheduledDate != null &&
         getInterviewBoundary(interview.scheduledDate, interview.scheduledTime) >= recentPastStart &&
         getInterviewBoundary(interview.scheduledDate, interview.scheduledTime) < now &&
         ['scheduled', 'rescheduled', 'completed'].includes(interview.status)
       )
-      .sort((a, b) => b.scheduledDate.getTime() - a.scheduledDate.getTime())
+      .sort((a, b) => (b.scheduledDate?.getTime() ?? 0) - (a.scheduledDate?.getTime() ?? 0))
       .slice(0, 10)
       .map((interview) => {
         const application = applicationById.get(interview.applicationId)
