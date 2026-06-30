@@ -3,21 +3,14 @@ import { monitorJobBoards } from '@/lib/job-monitor'
 import { sendNewJobsEmail } from '@/lib/email'
 import { syncApplicationEmailsForUser } from '@/lib/email-sync'
 import { prisma } from '@/lib/prisma'
+import { requireCronSecret } from '@/lib/api-auth'
 
 export const maxDuration = 300
 
 export async function POST(request: NextRequest) {
   try {
-    // Check for cron secret key
-    const cronSecret = request.headers.get('x-cron-secret')
-    const expectedSecret = process.env.CRON_SECRET || 'change-this-secret'
-
-    if (cronSecret !== expectedSecret) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
+    const cronError = requireCronSecret(request)
+    if (cronError) return cronError
 
     // Get all users that need job scans and/or Gmail sync
     const users = await prisma.user.findMany({

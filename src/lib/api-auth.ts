@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { timingSafeEqual } from "crypto"
 
 export type AuthenticatedUser = {
   id: string
@@ -53,4 +54,21 @@ export async function requireAdminUser(): Promise<
   }
 
   return authResult
+}
+
+// Fail-CLOSED cron auth. Rejects when CRON_SECRET is unset (never falls back to a
+// hardcoded default that ships in source) and compares in constant time.
+export function requireCronSecret(request: Request): NextResponse | null {
+  const provided = request.headers.get("x-cron-secret") || ""
+  const expected = process.env.CRON_SECRET || ""
+  if (!expected) {
+    console.error("[cron-auth] CRON_SECRET not set — rejecting cron request")
+    return NextResponse.json({ error: "Cron not configured" }, { status: 503 })
+  }
+  const a = Buffer.from(provided)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  }
+  return null
 }

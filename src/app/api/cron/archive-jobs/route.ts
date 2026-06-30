@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireCronSecret } from "@/lib/api-auth";
 
 const ARCHIVE_AFTER_DAYS = 30;
 
 export async function GET(request: NextRequest) {
-  const cronSecret = request.headers.get("x-cron-secret")
-  const expectedSecret = process.env.CRON_SECRET || "change-this-secret"
-  if (cronSecret !== expectedSecret) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const cronError = requireCronSecret(request)
+  if (cronError) return cronError
 
   try {
     const startTime = Date.now();

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { companyCreateSchema } from "@/lib/schemas/company"
+import { requireAdminUser } from "@/lib/api-auth"
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -27,10 +28,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const adminCheck = await requireAdminUser()
+  if (adminCheck.response) return adminCheck.response
+  const session = { user: adminCheck.user }
 
   let body: unknown
   try {

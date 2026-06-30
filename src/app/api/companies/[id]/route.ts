@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { companyUpdateSchema } from "@/lib/schemas/company"
+import { requireAdminUser } from "@/lib/api-auth"
 
 type RouteContext = { params: Promise<{ id: string }> }
 
@@ -18,10 +19,9 @@ export async function GET(_req: NextRequest, ctx: RouteContext) {
 }
 
 export async function PATCH(request: NextRequest, ctx: RouteContext) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const adminCheck = await requireAdminUser()
+  if (adminCheck.response) return adminCheck.response
+  const session = { user: adminCheck.user }
   const { id } = await ctx.params
 
   let body: unknown
@@ -73,10 +73,9 @@ export async function PATCH(request: NextRequest, ctx: RouteContext) {
  *   company_id=NULL (FK is ON DELETE SET NULL).
  */
 export async function DELETE(request: NextRequest, ctx: RouteContext) {
-  const session = await auth()
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  const adminCheck = await requireAdminUser()
+  if (adminCheck.response) return adminCheck.response
+  const session = { user: adminCheck.user }
   const { id } = await ctx.params
   const force = request.nextUrl.searchParams.get("force") === "true"
 

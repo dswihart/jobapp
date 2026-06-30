@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { syncApplicationEmailsForUser } from '@/lib/email-sync'
+import { requireCronSecret } from '@/lib/api-auth'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -10,10 +11,8 @@ export const maxDuration = 300
 // so we sync the user that owns that mailbox. Falls back to the primary (oldest)
 // user if no email match is found. Run hourly via cron.
 export async function POST(request: NextRequest) {
-  const cronSecret = request.headers.get('x-cron-secret')
-  if (cronSecret !== (process.env.CRON_SECRET || 'change-this-secret')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const cronError = requireCronSecret(request)
+  if (cronError) return cronError
 
   const mailbox = (process.env.GMAIL_SYNC_EMAIL || process.env.NOTIFY_EMAIL || '').toLowerCase()
 

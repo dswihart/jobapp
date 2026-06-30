@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
 import { toggleSource } from '@/lib/sources'
+import { requireAdminUser } from '@/lib/api-auth'
 
 export async function POST(request: Request) {
   try {
+    const adminCheck = await requireAdminUser()
+    if (adminCheck.response) return adminCheck.response
     const { name, enabled } = await request.json()
 
     if (!name || typeof enabled !== 'boolean') {

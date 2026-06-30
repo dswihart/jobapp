@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendReminderEmail } from '@/lib/email'
+import { requireCronSecret } from '@/lib/api-auth'
 
 export async function POST(request: NextRequest) {
-  const cronSecret = request.headers.get('x-cron-secret')
-  if (cronSecret !== (process.env.CRON_SECRET || 'change-this-secret')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const cronError = requireCronSecret(request)
+  if (cronError) return cronError
 
   const now = new Date()
   const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000)
