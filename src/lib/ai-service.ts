@@ -514,8 +514,8 @@ Return ONLY valid JSON, no markdown.`
     // Run Claude and MiniMax in parallel for consensus scoring
     const [message, miniMaxResult] = await Promise.all([
       anthropic.messages.create({
-        model: modelOverride || 'claude-haiku-4-5-20251001',
-        max_tokens: leanThreshold !== undefined ? 2048 : 4096,
+        model: modelOverride || 'open:scoring',
+        max_tokens: leanThreshold !== undefined ? 1536 : 2048,
         temperature: 0.3,
         messages: [{ role: 'user', content: stripLoneSurrogates(prompt) }],
       }),

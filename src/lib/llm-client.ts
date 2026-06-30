@@ -28,8 +28,27 @@ const MODEL_MAP: Record<string, string> = {
 }
 const DEFAULT_SLUG = 'anthropic/claude-sonnet-4.6'
 
+// Selected low/medium-stakes tasks are offloaded to a cheaper open model on
+// OpenRouter (2026-06-30, per user). Each logical alias maps to the open slug
+// for the OpenRouter path AND to a real Claude model for the native-Anthropic
+// fallback, so quality degrades gracefully to Claude if OpenRouter fails.
+// Override the open model via OPENROUTER_CHEAP_SLUG.
+const OPEN_CHEAP_SLUG = process.env.OPENROUTER_CHEAP_SLUG || 'qwen/qwen-2.5-72b-instruct'
+const ALIAS_MAP: Record<string, { or: string; anthropic: string }> = {
+  'open:classify':    { or: OPEN_CHEAP_SLUG, anthropic: 'claude-haiku-4-5-20251001' },
+  'open:coverletter': { or: OPEN_CHEAP_SLUG, anthropic: 'claude-sonnet-4-6' },
+  'open:resume':      { or: OPEN_CHEAP_SLUG, anthropic: 'claude-sonnet-4-5' },
+  'open:interview':   { or: OPEN_CHEAP_SLUG, anthropic: 'claude-sonnet-4-5' },
+  'open:scoring':     { or: OPEN_CHEAP_SLUG, anthropic: 'claude-haiku-4-5-20251001' },
+}
+
+// For the Anthropic fallback path: resolve a logical alias back to a real Claude id.
+function resolveAnthropicModel(model: string): string {
+  return ALIAS_MAP[model]?.anthropic || model
+}
+
 function mapModel(model: string): string {
-  return MODEL_MAP[model] || DEFAULT_SLUG
+  return ALIAS_MAP[model]?.or || MODEL_MAP[model] || DEFAULT_SLUG
 }
 
 // Flatten Anthropic-style content (string | block[]) into an OpenAI content string.
@@ -126,7 +145,7 @@ export function createLLMClient(opts: { apiKey?: string } = {}) {
             )
           }
         }
-        return await anthropic.messages.create(params)
+        return await anthropic.messages.create({ ...params, model: resolveAnthropicModel(params.model) })
       },
     },
   }

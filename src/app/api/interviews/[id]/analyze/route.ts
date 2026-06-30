@@ -130,7 +130,7 @@ IMPORTANT: Respond ONLY with valid JSON, no additional text or markdown.`
       // Was "claude-sonnet-4-20250514" — that model has been retired and now 404s
       // ("not_found_error"), which surfaced as "Failed to analyze interview".
       // Use the app's standard current model (routed via OpenRouter, Anthropic fallback).
-      model: "claude-sonnet-4-5",
+      model: "open:interview",
       max_tokens: 4000,
       messages: [
         {
