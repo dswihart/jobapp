@@ -95,7 +95,7 @@ export async function PATCH(
     // Build update data
     const updateData: Record<string, unknown> = {}
 
-    if (data.scheduledDate !== undefined) updateData.scheduledDate = new Date(data.scheduledDate)
+    if (data.scheduledDate !== undefined) updateData.scheduledDate = data.scheduledDate ? new Date(data.scheduledDate) : null
     if (data.scheduledTime !== undefined) updateData.scheduledTime = data.scheduledTime
     if (data.actualDate !== undefined) updateData.actualDate = data.actualDate ? new Date(data.actualDate) : null
     if (data.duration !== undefined) updateData.duration = data.duration

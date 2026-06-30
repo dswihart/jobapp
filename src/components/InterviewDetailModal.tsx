@@ -174,11 +174,21 @@ export default function InterviewDetailModal({
     setError('')
 
     try {
+      // Store the day as a noon-UTC instant (so the calendar day never rolls
+      // across a timezone) and carry the time-of-day in scheduledTime. Combining
+      // here instead of sending a bare YYYY-MM-DD is what stops a routine edit
+      // (e.g. just flipping status) from zeroing the interview time.
+      const hasDate = !!formData.scheduledDate
+      const scheduledDateIso = hasDate ? `${formData.scheduledDate}T12:00:00.000Z` : null
+      // Adding a date to a still-unscheduled interview promotes it to scheduled.
+      const nextStatus =
+        hasDate && formData.status === 'needs_scheduling' ? 'scheduled' : formData.status
+
       const response = await fetch('/api/interviews/' + interview.id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          scheduledDate: formData.scheduledDate,
+          scheduledDate: scheduledDateIso,
           scheduledTime: formData.scheduledTime || null,
           duration: formData.duration ? parseInt(formData.duration) : null,
           interviewType: formData.interviewType,
@@ -186,12 +196,16 @@ export default function InterviewDetailModal({
           stage: formData.stage || null,
           location: formData.location || null,
           meetingLink: formData.meetingLink || null,
-          status: formData.status,
+          status: nextStatus,
           outcome: formData.outcome || null,
           preparationNotes: formData.preparationNotes || null,
           postInterviewNotes: formData.postInterviewNotes || null,
           transcript: formData.transcript || null,
           companyFeedback: formData.companyFeedback || null,
+          // Saving an auto-detected interview that now has a date confirms it
+          // (clears the reminder-suppression stamp). With no date we keep it
+          // auto-detected so the "add the date, then confirm" prompt stays.
+          ...(hasDate ? { autoDetected: false } : {}),
         })
       })
 
