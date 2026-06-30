@@ -47,22 +47,12 @@ export async function GET(request: NextRequest) {
       where: whereClause,
       include: {
         interviewers: true,
+        application: { select: { id: true, company: true, role: true, status: true } },
       },
       orderBy: { scheduledDate: "desc" },
     })
 
-    // Get application details for each interview
-    const interviewsWithApplications = await Promise.all(
-      interviews.map(async (interview) => {
-        const application = await prisma.application.findUnique({
-          where: { id: interview.applicationId },
-          select: { id: true, company: true, role: true, status: true },
-        })
-        return { ...interview, application }
-      })
-    )
-
-    return NextResponse.json({ interviews: interviewsWithApplications })
+    return NextResponse.json({ interviews })
   } catch (error) {
     console.error("Error fetching interviews:", error)
     return NextResponse.json({ error: "Failed to fetch interviews" }, { status: 500 })

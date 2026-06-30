@@ -101,6 +101,7 @@ model Application {
   contacts Contact[]
   followUps FollowUp[]
   emailSyncEvents EmailSyncEvent[]
+  interviews Interview[]
 
   @@map("applications")
 }
@@ -469,6 +470,7 @@ model SkillCategory {
 model Interview {
   id              String   @id @default(cuid())
   applicationId   String   @map("application_id")
+  application     Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   
   // Interview timing
   scheduledDate   DateTime? @map("scheduled_date")
