@@ -198,6 +198,28 @@ export default function InterviewsSection({
     })
   }
 
+  // Build a Google Calendar "add event" link from a dated interview. Floating
+  // local clock time (the stored scheduledTime), 1-hour default duration.
+  const googleCalUrl = (iv: Interview) => {
+    if (!iv.scheduledDate) return '#'
+    const day = iv.scheduledDate.slice(0, 10)
+    const time = iv.scheduledTime && /^\d{2}:\d{2}$/.test(iv.scheduledTime) ? iv.scheduledTime : '12:00'
+    const [y, m, d] = day.split('-').map(Number)
+    const [hh, mm] = time.split(':').map(Number)
+    const start = new Date(Date.UTC(y, m - 1, d, hh, mm))
+    const end = new Date(start.getTime() + 60 * 60 * 1000)
+    const fmt = (dt: Date) =>
+      `${dt.getUTCFullYear()}${String(dt.getUTCMonth() + 1).padStart(2, '0')}${String(dt.getUTCDate()).padStart(2, '0')}T${String(dt.getUTCHours()).padStart(2, '0')}${String(dt.getUTCMinutes()).padStart(2, '0')}00`
+    const title = `Interview: ${iv.application?.company || 'Company'}${iv.application?.role ? ' — ' + iv.application.role : ''}`
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: title,
+      dates: `${fmt(start)}/${fmt(end)}`,
+      details: `${iv.interviewType} interview (round ${iv.round})`,
+    })
+    return `https://calendar.google.com/calendar/render?${params.toString()}`
+  }
+
   // A date-TBD interview (needs_scheduling or null date) is OPEN: shown in
   // Upcoming so the user can schedule/confirm it, never bucketed as Past.
   const needsScheduling = (i: Interview) =>
@@ -338,6 +360,27 @@ export default function InterviewsSection({
                       Round {interview.round}
                     </span>
                   </div>
+
+                  {interview.scheduledDate && (
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                      <a
+                        href={`/api/interviews/${interview.id}/ics`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        <CalendarIcon className="h-3.5 w-3.5" /> Add to calendar
+                      </a>
+                      <a
+                        href={googleCalUrl(interview)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" /> Google Calendar
+                      </a>
+                    </div>
+                  )}
 
                   {(interview.interviewers?.length ?? 0) > 0 && (
                     <div className="flex items-center gap-2 mt-2 text-sm text-gray-500 dark:text-gray-400">
