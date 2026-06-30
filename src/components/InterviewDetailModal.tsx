@@ -113,7 +113,7 @@ export default function InterviewDetailModal({
   const [localInterview, setLocalInterview] = useState<Interview | null>(interview)
 
   // Form states
-  const [editMode, setEditMode] = useState(false)
+  const [editMode, setEditMode] = useState(true)
   const [formData, setFormData] = useState({
     scheduledDate: '',
     scheduledTime: '',
@@ -162,7 +162,7 @@ export default function InterviewDetailModal({
         companyFeedback: interview.companyFeedback || '',
       })
       setInterviewers(interview.interviewers || [])
-      setEditMode(false)
+      setEditMode(true)
       setLocalInterview(interview)
       setActiveTab("details")
     }
@@ -211,7 +211,7 @@ export default function InterviewDetailModal({
 
       const data = await response.json()
       if (data.success) {
-        setEditMode(false)
+        setEditMode(true)
         onSuccess()
       } else {
         setError(data.error || 'Failed to update interview')
