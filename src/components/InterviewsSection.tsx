@@ -59,6 +59,7 @@ interface Interview {
   companyFeedback?: string
   autoDetected?: boolean
   archived?: boolean
+  prepBrief?: { companyBrief?: string; likelyQuestions?: string[]; talkingPoints?: string[]; questionsToAsk?: string[] } | null
   interviewers: Interviewer[]
   application?: {
     id: string
@@ -84,6 +85,8 @@ export default function InterviewsSection({
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed' | 'archived'>('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [preppingId, setPreppingId] = useState<string | null>(null)
+  const [prepError, setPrepError] = useState('')
 
   const fetchInterviews = useCallback(async () => {
     try {
@@ -150,6 +153,28 @@ export default function InterviewsSection({
       fetchInterviews()
     } catch (error) {
       console.error('Error archiving interview:', error)
+    }
+  }
+
+  const prepInterview = async (interviewId: string, regenerate: boolean) => {
+    setPreppingId(interviewId)
+    setPrepError('')
+    try {
+      const res = await fetch('/api/interviews/' + interviewId + '/prep', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ regenerate }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setPrepError(data.error || 'Prep failed — try again.')
+      } else {
+        await fetchInterviews()
+      }
+    } catch {
+      setPrepError('Prep failed — try again.')
+    } finally {
+      setPreppingId(null)
     }
   }
 
@@ -450,6 +475,61 @@ export default function InterviewsSection({
 
               {expandedId === interview.id && (
                 <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-4">
+                  <div>
+                    {interview.prepBrief ? (
+                      <div className="rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 p-3 space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 font-medium text-purple-800 dark:text-purple-300">
+                            <SparklesIcon className="h-4 w-4" /> AI interview prep
+                          </span>
+                          <button
+                            onClick={() => prepInterview(interview.id, true)}
+                            disabled={preppingId === interview.id}
+                            className="text-xs text-purple-700 dark:text-purple-400 hover:underline disabled:opacity-50"
+                          >
+                            {preppingId === interview.id ? 'Regenerating…' : 'Regenerate'}
+                          </button>
+                        </div>
+                        {interview.prepBrief.companyBrief && (
+                          <p className="text-gray-700 dark:text-gray-300">{interview.prepBrief.companyBrief}</p>
+                        )}
+                        {Array.isArray(interview.prepBrief.likelyQuestions) && interview.prepBrief.likelyQuestions.length > 0 && (
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">Likely questions</div>
+                            <ul className="list-disc list-inside text-gray-700 dark:text-gray-300">
+                              {interview.prepBrief.likelyQuestions.map((q: string, i: number) => <li key={i}>{q}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {Array.isArray(interview.prepBrief.talkingPoints) && interview.prepBrief.talkingPoints.length > 0 && (
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">Talking points</div>
+                            <ul className="list-disc list-inside text-gray-700 dark:text-gray-300">
+                              {interview.prepBrief.talkingPoints.map((q: string, i: number) => <li key={i}>{q}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                        {Array.isArray(interview.prepBrief.questionsToAsk) && interview.prepBrief.questionsToAsk.length > 0 && (
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-white">Questions to ask them</div>
+                            <ul className="list-disc list-inside text-gray-700 dark:text-gray-300">
+                              {interview.prepBrief.questionsToAsk.map((q: string, i: number) => <li key={i}>{q}</li>)}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => prepInterview(interview.id, false)}
+                        disabled={preppingId === interview.id}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-sm hover:bg-purple-700 disabled:opacity-50"
+                      >
+                        <SparklesIcon className="h-4 w-4" /> {preppingId === interview.id ? 'Preparing…' : 'Prep me with AI'}
+                      </button>
+                    )}
+                    {prepError && preppingId !== interview.id && <p className="mt-1 text-xs text-red-500">{prepError}</p>}
+                  </div>
+
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     {interview.stage && (
                       <div>

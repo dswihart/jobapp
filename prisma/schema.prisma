@@ -504,6 +504,7 @@ model Interview {
   // awaiting the user's confirmation (reminders are suppressed until confirmed).
   autoDetected    Boolean  @default(false) @map("auto_detected")
   archived        Boolean  @default(false) @map("archived")
+  prepBrief       Json?    @map("prep_brief")
 
   // Feedback received
   companyFeedback String?  @map("company_feedback") @db.Text
