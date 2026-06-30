@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma"
 import Anthropic from "@anthropic-ai/sdk"
 import puppeteer from "puppeteer"
 import { requireAuthenticatedUser } from "@/lib/api-auth"
-import { isAllowedUrl } from "@/lib/url-validation"
+import { isAllowedUrl, safeFetch } from "@/lib/url-validation"
 
 const client = createLLMClient({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -98,7 +98,7 @@ export async function POST(request: NextRequest) {
       // Fallback to simple fetch
       try {
         console.log("Falling back to simple fetch...")
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

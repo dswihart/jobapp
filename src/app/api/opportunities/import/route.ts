@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { isAllowedUrl } from '@/lib/url-validation'
+import { isAllowedUrl, safeFetch } from '@/lib/url-validation'
 import { extractJobFromHtml, extractJobFromText, analyzeJobFitEnhanced } from '@/lib/ai-service'
 import { fetchRenderedHtml } from '@/lib/browser-fetch'
 
@@ -72,13 +72,12 @@ export async function POST(request: Request) {
       let html: string
       let fetchedUrl = url
       try {
-        const response = await fetch(url, {
+        const response = await safeFetch(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           },
           signal: AbortSignal.timeout(15000),
-          redirect: 'follow',
         })
 
         fetchedUrl = response.url || url

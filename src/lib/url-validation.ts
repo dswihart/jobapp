@@ -4,6 +4,9 @@
  * to prevent SSRF attacks.
  */
 
+import { lookup } from "dns/promises"
+import net from "net"
+
 interface UrlValidationResult {
   allowed: boolean
   reason?: string
@@ -132,4 +135,54 @@ function extractIPv4FromMappedIPv6(ipv6: string): string | null {
   }
 
   return null
+}
+
+// ---- SSRF-hardened outbound fetch (DNS-resolve + redirect re-validation) ----
+
+function isPrivateAddress(ip: string): boolean {
+  if (net.isIPv4(ip)) return isPrivateIPv4(ip)
+  if (net.isIPv6(ip)) return isPrivateIPv6(ip)
+  return true // unknown shape -> block
+}
+
+// Reject hostnames that resolve (now) to a private/reserved address — closes the
+// DNS-rebinding / public-name-points-at-internal-IP gap that string checks miss.
+async function hostResolvesPublic(hostname: string): Promise<boolean> {
+  const bare = hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname
+  if (net.isIP(bare)) return !isPrivateAddress(bare)
+  try {
+    const addrs = await lookup(bare, { all: true })
+    return addrs.length > 0 && addrs.every((a) => !isPrivateAddress(a.address))
+  } catch {
+    return false
+  }
+}
+
+/**
+ * SSRF-safe fetch for any server-side fetch of a user-supplied URL: validates the
+ * URL, resolves the host and rejects private/reserved targets, then follows
+ * redirects MANUALLY, re-validating every hop.
+ */
+export async function safeFetch(
+  rawUrl: string,
+  init: RequestInit = {},
+  maxRedirects = 5
+): Promise<Response> {
+  let current = rawUrl
+  for (let hop = 0; hop <= maxRedirects; hop++) {
+    const check = isAllowedUrl(current)
+    if (!check.allowed) throw new Error(`Blocked URL (${check.reason}): ${current}`)
+    const { hostname } = new URL(current)
+    if (!(await hostResolvesPublic(hostname))) {
+      throw new Error(`Blocked URL (resolves to private/unreachable host): ${hostname}`)
+    }
+    const res = await fetch(current, { ...init, redirect: "manual" })
+    const loc = res.headers.get("location")
+    if (res.status >= 300 && res.status < 400 && loc) {
+      current = new URL(loc, current).toString()
+      continue
+    }
+    return res
+  }
+  throw new Error("Too many redirects")
 }

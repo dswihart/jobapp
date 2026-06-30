@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { generateCoverLetter } from "@/lib/cover-letter-service"
 import { auth } from "@/lib/auth"
+import { isAllowedUrl, safeFetch } from "@/lib/url-validation"
 import * as cheerio from "cheerio"
 import { readFile } from "fs/promises"
 import path from "path"
@@ -9,7 +10,9 @@ import mammoth from "mammoth"
 
 async function fetchJobDescription(url: string): Promise<string> {
   try {
-    const response = await fetch(url, {
+    const check = isAllowedUrl(url)
+    if (!check.allowed) throw new Error(`Blocked URL: ${check.reason}`)
+    const response = await safeFetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
