@@ -14,9 +14,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Normalize the email: login lowercases it, so registration must too —
+    // otherwise an uppercase address stored as-typed could never log in.
+    const normalizedEmail = String(email).trim().toLowerCase()
+
+    if (String(password).length < 8) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters' },
+        { status: 400 }
+      )
+    }
+
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: normalizedEmail },
     })
 
     if (existingUser) {
@@ -32,11 +43,11 @@ export async function POST(request: NextRequest) {
     // Create user
     const user = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         password: hashedPassword,
         name: name || 'Job Seeker',
         skills: [],
-        autoScan: true,
+        autoScan: false,
       },
     })
 

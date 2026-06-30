@@ -67,6 +67,16 @@ export async function PUT(
       finalAppliedDate = new Date()
     }
 
+    // IDOR guard: a user may only attach their OWN resume / cover letter.
+    if (resumeId) {
+      const ownsResume = await prisma.resume.findFirst({ where: { id: resumeId, userId: session.user.id }, select: { id: true } })
+      if (!ownsResume) return NextResponse.json({ error: 'Resume not found' }, { status: 404 })
+    }
+    if (coverLetterId) {
+      const ownsCover = await prisma.coverLetter.findFirst({ where: { id: coverLetterId, userId: session.user.id }, select: { id: true } })
+      if (!ownsCover) return NextResponse.json({ error: 'Cover letter not found' }, { status: 404 })
+    }
+
     const updateData: Record<string, unknown> = {
       company,
       role,

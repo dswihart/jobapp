@@ -86,6 +86,15 @@ export async function PUT(
     if (priority !== undefined) updateData.priority = priority
     if (type !== undefined) updateData.type = type
     if (notifyBefore !== undefined) updateData.notifyBefore = notifyBefore
+    // IDOR guard: only attach the user's own application / contact.
+    if (applicationId) {
+      const ownsApp = await prisma.application.findFirst({ where: { id: applicationId, userId: session.user.id }, select: { id: true } })
+      if (!ownsApp) return NextResponse.json({ error: 'Application not found' }, { status: 404 })
+    }
+    if (contactId) {
+      const ownsContact = await prisma.contact.findFirst({ where: { id: contactId, userId: session.user.id }, select: { id: true } })
+      if (!ownsContact) return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    }
     if (applicationId !== undefined) updateData.applicationId = applicationId || null
     if (contactId !== undefined) updateData.contactId = contactId || null
 
