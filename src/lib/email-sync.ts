@@ -256,8 +256,9 @@ function keywordVerdict(subject: string, text: string): AiEmailVerdict {
   } else if (/(schedule (a |an |your )?(call|interview|time)|interview (invitation|request)|phone screen|technical screen|hiring manager|calendar invite|availability)/i.test(haystack)) {
     category = 'INTERVIEW'
   }
-  // The keyword fallback never extracts a date, so an AI outage can never
-  // auto-create an interview (mirrors the APPLICATION_RECEIVED safety gate).
+  // The keyword fallback never extracts a date or company, so it can never
+  // auto-create an Application; during an AI outage it can still create a
+  // dateless needs_scheduling interview for an already-matched application.
   return { related: true, category, company: null, role: null, summary: null, confidence: 40, interviewDate: null, interviewTime: null }
 }
 
@@ -443,9 +444,11 @@ export async function syncApplicationEmailsForUser(
           body: text,
           companies: companyNames,
         })
+        let usedKeywordFallback = false
         if (!verdict) {
           // AI unavailable — fall back to keywords so we still capture obvious mail.
           verdict = keywordVerdict(subject, text)
+          usedKeywordFallback = true
         }
 
         if (!verdict.related) continue
@@ -547,7 +550,12 @@ export async function syncApplicationEmailsForUser(
         // emails about the same interview don't pile up. Created rows are flagged
         // autoDetected (needs the user's confirmation) and have reminderSentAt
         // pre-stamped so the reminder cron stays silent until the user confirms.
-        if (classification === 'INTERVIEW' && matched && verdict.confidence >= 60) {
+        // Normally require AI confidence >= 60. During an AI outage the keyword
+        // fallback caps confidence at 40 and would never clear that gate, so
+        // interview detection goes dark exactly when relied upon. Allow a
+        // keyword-fallback INTERVIEW to still create a needs_scheduling row when
+        // it is tied to an already-tracked application (it never creates an app).
+        if (classification === 'INTERVIEW' && matched && (verdict.confidence >= 60 || usedKeywordFallback)) {
           // Create the interview even when the email has no concrete date yet
           // (the common "let's find a time" / Calendly invite). Dated email ->
           // status 'scheduled'; dateless -> 'needs_scheduling' with a null date
