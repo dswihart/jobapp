@@ -82,7 +82,9 @@ export async function PUT(
       role,
       status,
       notes,
-      jobUrl,
+      // '' must be stored as NULL: the (userId, jobUrl) unique index exempts
+      // NULLs but allows only one '' per user, so a second blank-URL edit 500s.
+      jobUrl: jobUrl === '' ? null : jobUrl,
       appliedDate: finalAppliedDate,
       resumeId: resumeId !== undefined ? (resumeId || null) : undefined,
       coverLetterId: coverLetterId !== undefined ? (coverLetterId || null) : undefined

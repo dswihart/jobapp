@@ -79,7 +79,9 @@ export async function POST(request: NextRequest) {
         role,
         status: finalStatus,
         notes,
-        jobUrl,
+        // '' must be stored as NULL: the (userId, jobUrl) unique index exempts
+        // NULLs but allows only one '' per user.
+        jobUrl: jobUrl || null,
         appliedDate: finalAppliedDate,
         userId: session.user.id,
         resumeId: resumeId || null,

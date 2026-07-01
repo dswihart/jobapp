@@ -444,11 +444,9 @@ export async function syncApplicationEmailsForUser(
           body: text,
           companies: companyNames,
         })
-        let usedKeywordFallback = false
         if (!verdict) {
           // AI unavailable — fall back to keywords so we still capture obvious mail.
           verdict = keywordVerdict(subject, text)
-          usedKeywordFallback = true
         }
 
         if (!verdict.related) continue
@@ -518,14 +516,15 @@ export async function syncApplicationEmailsForUser(
         summary.imported++
         if (matched) summary.matched++
 
-        // When the email is tied to a tracked application, flag it in Gmail:
-        // mark it read (\Seen) and apply the "Important" label so it stands out.
+        // When the email is tied to a tracked application, apply the Gmail
+        // "Important" label so it stands out. Deliberately do NOT add \Seen:
+        // the user triages their own inbox, and auto-marking interview
+        // invitations as read made them easy to miss.
         if (matched) {
           try {
-            await client.messageFlagsAdd(String(cand.uid), ['\\Seen'], { uid: true })
             await client.messageFlagsAdd(String(cand.uid), ['\\Important'], { uid: true, useLabels: true })
           } catch (flagErr) {
-            console.error(`[Email Sync] Could not flag email ${cand.messageId} as read/important:`, flagErr instanceof Error ? flagErr.message : flagErr)
+            console.error(`[Email Sync] Could not flag email ${cand.messageId} as important:`, flagErr instanceof Error ? flagErr.message : flagErr)
           }
         }
         if (classification === 'INTERVIEW') summary.interviewsDetected++
@@ -542,20 +541,17 @@ export async function syncApplicationEmailsForUser(
           },
         })
 
-        // Safely auto-create an interview from a confidently-dated invitation.
-        // Guards: must be an AI INTERVIEW verdict (the keyword fallback never
-        // sets a date), tied to a tracked application, with a plausible date and
-        // confidence >= 60. Deduped against any existing interview for the same
+        // Auto-create an interview from a detected invitation tied to a tracked
+        // application. Deduped against existing interviews for the same
         // application within a ±2-day window so invite + reminder + "next steps"
         // emails about the same interview don't pile up. Created rows are flagged
         // autoDetected (needs the user's confirmation) and have reminderSentAt
         // pre-stamped so the reminder cron stays silent until the user confirms.
-        // Normally require AI confidence >= 60. During an AI outage the keyword
-        // fallback caps confidence at 40 and would never clear that gate, so
-        // interview detection goes dark exactly when relied upon. Allow a
-        // keyword-fallback INTERVIEW to still create a needs_scheduling row when
-        // it is tied to an already-tracked application (it never creates an app).
-        if (classification === 'INTERVIEW' && matched && (verdict.confidence >= 60 || usedKeywordFallback)) {
+        // No confidence gate: an INTERVIEW verdict below the old >= 60 cutoff was
+        // silently dropped (e.g. the Allianz HR-interview invite on 2026-06-30),
+        // which is worse than surfacing a pending-confirmation row the user can
+        // dismiss. Auto-creating a whole application above still requires >= 60.
+        if (classification === 'INTERVIEW' && matched) {
           // Create the interview even when the email has no concrete date yet
           // (the common "let's find a time" / Calendly invite). Dated email ->
           // status 'scheduled'; dateless -> 'needs_scheduling' with a null date
