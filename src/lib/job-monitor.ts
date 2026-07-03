@@ -38,6 +38,25 @@ function isPaywalledHost(url: string | undefined): boolean {
 }
 
 /**
+ * LinkedIn URLs that are not job postings — people profiles (/in/, /pub/),
+ * feed posts (/posts/) and company pages. Exa's neural search returns people
+ * profiles for "hiring <title>" queries and they masquerade as opportunities
+ * ("Unknown Company", person's name as title). Only /jobs/... is a posting.
+ * Applied globally (like the paywall filter) so no source can slip them in.
+ */
+function isNonJobLinkedInUrl(url: string | undefined): boolean {
+  if (!url) return false
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, '').toLowerCase()
+    if (host !== 'linkedin.com' && !host.endsWith('.linkedin.com')) return false
+    return !u.pathname.startsWith('/jobs/')
+  } catch {
+    return false
+  }
+}
+
+/**
  * DEPRECATED: Location filtering now handled by AI based on user preferences
  * Each user can set their own location preferences in their profile
  */
@@ -466,14 +485,20 @@ async function fetchFromAllSources(userId: string): Promise<JobPosting[]> {
   )
 
   // Drop paywalled job boards (e.g. Working Nomads, FlexJobs) — the user can't
-  // access these without paying, so they should never reach the DB.
-  const accessibleJobs = uniqueJobs.filter(job => !isPaywalledHost(job.jobUrl))
-  const paywalledDropped = uniqueJobs.length - accessibleJobs.length
+  // access these without paying — and LinkedIn non-posting URLs (people
+  // profiles etc.); neither should ever reach the DB.
+  const paywallFiltered = uniqueJobs.filter(job => !isPaywalledHost(job.jobUrl))
+  const paywalledDropped = uniqueJobs.length - paywallFiltered.length
+  const accessibleJobs = paywallFiltered.filter(job => !isNonJobLinkedInUrl(job.jobUrl))
+  const linkedInDropped = paywallFiltered.length - accessibleJobs.length
 
   console.log('[Job Aggregator] Summary:')
   console.log('  - Total: ' + allJobs.length + ' jobs (' + uniqueJobs.length + ' unique)')
   if (paywalledDropped > 0) {
     console.log('  - Dropped ' + paywalledDropped + ' paywalled-board jobs (Working Nomads / FlexJobs)')
+  }
+  if (linkedInDropped > 0) {
+    console.log('  - Dropped ' + linkedInDropped + ' LinkedIn non-posting URLs (profiles/posts/company pages)')
   }
 
   return accessibleJobs

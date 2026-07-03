@@ -176,11 +176,29 @@ function isAggregatorHost(url: string): boolean {
   }
 }
 
+// Exa's neural search answers "hiring <title> ..." queries with LinkedIn
+// PEOPLE profiles (linkedin.com/in/...) of matching professionals — their
+// profile text is skill-dense, so they even score well and pollute the feed
+// as "Unknown Company" opportunities (63 of them on 2026-07-02/03). Only
+// /jobs/... paths on LinkedIn are actual postings; drop everything else on
+// that host (profiles, /posts/ feed content, /company/ pages).
+function isNonJobLinkedInUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    const host = u.hostname.replace(/^www\./, "").toLowerCase()
+    if (host !== "linkedin.com" && !host.endsWith(".linkedin.com")) return false
+    return !u.pathname.startsWith("/jobs/")
+  } catch {
+    return false
+  }
+}
+
 export function toJobPosting(r: ExaResult): JobPosting | null {
   if (!r.url) return null
   // Aggregator/content-farm results pollute the DB with fake company names and
   // duplicate real postings under different "brands" — drop them at the source.
   if (isAggregatorHost(r.url)) return null
+  if (isNonJobLinkedInUrl(r.url)) return null
   const title = (r.title || "").trim()
   if (!title) return null
   return {
