@@ -165,6 +165,11 @@ const AGGREGATOR_HOST_DENYLIST = [
   // useless to the user even when the posting is real. See PAYWALLED_HOST_DENYLIST
   // in job-monitor.ts, which also drops these from non-Exa sources.
   "workingnomads", "flexjobs",
+  // Content-farm wave of 2026-07: junk boards hosted on free-blog domains
+  // (hirenixa.10001mb.com, careersync.liveblog365.com, jobs-radar.com).
+  // Denying the free-host parents (10001mb, liveblog365) kills future farms
+  // on the same hosting too.
+  "hirenixa", "jobs-radar", "jobsradar", "careersync", "10001mb", "liveblog365",
 ]
 
 function isAggregatorHost(url: string): boolean {
