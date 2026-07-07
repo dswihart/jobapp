@@ -1,74 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import {
-  CalendarIcon,
-  ClockIcon,
-  BuildingOfficeIcon,
-  UserGroupIcon,
-  DocumentTextIcon,
-  SparklesIcon,
-  PlusIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  VideoCameraIcon,
-  PhoneIcon,
-  MapPinIcon,
-  CheckCircleIcon,
-  XCircleIcon,
-  ExclamationTriangleIcon,
-  ArchiveBoxIcon,
-  ArrowUturnLeftIcon,
-  ArrowTopRightOnSquareIcon,
-} from '@heroicons/react/24/outline'
+import { CalendarIcon, PlusIcon } from '@heroicons/react/24/outline'
 import SummaryEmailButton from './SummaryEmailButton'
-import Link from 'next/link'
-
-interface Interviewer {
-  id: string
-  name: string
-  title?: string
-  department?: string
-  email?: string
-  linkedInUrl?: string
-  notes?: string
-  impression?: string
-  topics: string[]
-}
-
-interface Interview {
-  id: string
-  applicationId: string
-  scheduledDate: string | null
-  scheduledTime?: string
-  duration?: number
-  actualDate?: string
-  interviewType: string
-  round: number
-  stage?: string
-  location?: string
-  meetingLink?: string
-  status: string
-  outcome?: string
-  preparationNotes?: string
-  postInterviewNotes?: string
-  transcript?: string
-  aiAnalysis?: Record<string, unknown>
-  followUpSteps?: Array<{ priority: string; action: string; timing: string; reason: string }>
-  analyzedAt?: string
-  companyFeedback?: string
-  autoDetected?: boolean
-  archived?: boolean
-  prepBrief?: { companyBrief?: string; likelyQuestions?: string[]; talkingPoints?: string[]; questionsToAsk?: string[] } | null
-  interviewers: Interviewer[]
-  application?: {
-    id: string
-    company: string
-    role: string
-    status: string
-    jobUrl?: string
-  }
-}
+import ApplicationPipeline from './ApplicationPipeline'
+import type { Interview } from '@/lib/interview-types'
 
 interface InterviewsSectionProps {
   onOpenInterviewDetail: (interview: Interview) => void
@@ -76,48 +12,73 @@ interface InterviewsSectionProps {
   refreshTrigger?: number
 }
 
+type TabFilter = 'all' | 'upcoming' | 'completed' | 'archived'
+
+interface Group {
+  application: NonNullable<Interview['application']>
+  all: Interview[]
+  visible: Interview[]
+  needsActionCount: number
+  soonestUpcoming: number // ms timestamp, or Infinity
+  latestActivity: number // ms timestamp, or 0
+}
+
+// A date-TBD interview (needs_scheduling or null date) is OPEN: shown in
+// Upcoming so the user can schedule/confirm it, never bucketed as Past.
+const needsScheduling = (i: Interview) =>
+  (i.status === 'needs_scheduling' || !i.scheduledDate) &&
+  i.status !== 'completed' && i.status !== 'cancelled'
+const isUpcomingDated = (i: Interview) =>
+  !!i.scheduledDate && new Date(i.scheduledDate) > new Date() &&
+  ['scheduled', 'rescheduled'].includes(i.status)
+const isOpenUpcoming = (i: Interview) => needsScheduling(i) || isUpcomingDated(i)
+// A round the user still has to act on: an unconfirmed auto-detected row, or one
+// that has no date yet.
+const isNeedsAction = (i: Interview) => !i.archived && (!!i.autoDetected || needsScheduling(i))
+
+const visibleUnderFilter = (i: Interview, filter: TabFilter): boolean => {
+  if (filter === 'archived') return !!i.archived
+  if (i.archived) return false
+  if (filter === 'upcoming') return isOpenUpcoming(i)
+  if (filter === 'completed') return !isOpenUpcoming(i)
+  return true // 'all' (non-archived)
+}
+
 export default function InterviewsSection({
   onOpenInterviewDetail,
   onCreateInterview,
-  refreshTrigger
+  refreshTrigger,
 }: InterviewsSectionProps) {
   const [interviews, setInterviews] = useState<Interview[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'upcoming' | 'completed' | 'archived'>('all')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [filter, setFilter] = useState<TabFilter>('all')
+  const [expandedRoundId, setExpandedRoundId] = useState<string | null>(null)
+  const [collapseOverrides, setCollapseOverrides] = useState<Record<string, boolean>>({})
   const [preppingId, setPreppingId] = useState<string | null>(null)
   const [prepError, setPrepError] = useState('')
 
   const fetchInterviews = useCallback(async () => {
     try {
       setLoading(true)
-      const params = new URLSearchParams()
-      if (filter === 'upcoming') {
-        params.set('upcoming', 'true')
-      }
-      // 'Past' tab fetches all interviews and buckets client-side, so a
-      // past-dated interview that was never marked 'completed' still shows.
-
-      const response = await fetch('/api/interviews?' + params.toString(), { cache: 'no-store' })
+      // Always fetch the full set and bucket client-side so needs_scheduling /
+      // null-date rounds (which the server 'upcoming' filter would drop) still
+      // surface, and so ordinals are computed over the full pipeline.
+      const response = await fetch('/api/interviews', { cache: 'no-store' })
       const data = await response.json()
-
-      if (data.interviews) {
-        setInterviews(data.interviews)
-      }
+      if (data.interviews) setInterviews(data.interviews)
     } catch (error) {
       console.error('Error fetching interviews:', error)
     } finally {
       setLoading(false)
     }
-  }, [filter])
+  }, [])
 
   useEffect(() => {
     fetchInterviews()
   }, [fetchInterviews, refreshTrigger])
 
   // Re-pull when the user returns to the tab/window so interviews created
-  // out-of-band (the email-sync cron, another device) surface without a manual
-  // reload. Without this, the list only ever reflects in-page actions.
+  // out-of-band (email-sync cron, another device) surface without a reload.
   useEffect(() => {
     const refetchIfVisible = () => {
       if (document.visibilityState === 'visible') fetchInterviews()
@@ -178,101 +139,67 @@ export default function InterviewsSection({
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-      case 'completed': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-      case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-      case 'rescheduled': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-      case 'no-show': return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300'
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+  // ---- Group interviews by application ----
+  const groupsMap = new Map<string, Group>()
+  for (const iv of interviews) {
+    const app = iv.application
+    if (!app) continue // orphan guard; every interview should carry its application
+    let g = groupsMap.get(app.id)
+    if (!g) {
+      g = { application: app, all: [], visible: [], needsActionCount: 0, soonestUpcoming: Infinity, latestActivity: 0 }
+      groupsMap.set(app.id, g)
+    }
+    g.all.push(iv)
+    if (isNeedsAction(iv)) g.needsActionCount++
+    if (isUpcomingDated(iv) && iv.scheduledDate) {
+      g.soonestUpcoming = Math.min(g.soonestUpcoming, new Date(iv.scheduledDate).getTime())
+    }
+    if (iv.scheduledDate) {
+      g.latestActivity = Math.max(g.latestActivity, new Date(iv.scheduledDate).getTime())
     }
   }
 
-  const getOutcomeIcon = (outcome?: string) => {
-    switch (outcome) {
-      case 'passed':
-      case 'moved_forward':
-        return <CheckCircleIcon className="h-5 w-5 text-green-500" />
-      case 'failed':
-        return <XCircleIcon className="h-5 w-5 text-red-500" />
-      case 'pending':
-        return <ExclamationTriangleIcon className="h-5 w-5 text-yellow-500" />
-      default:
-        return null
-    }
+  const groups = Array.from(groupsMap.values())
+  for (const g of groups) {
+    g.visible = g.all.filter(i => visibleUnderFilter(i, filter))
   }
+  const visibleGroups = groups.filter(g => g.visible.length > 0)
 
-  const getInterviewTypeIcon = (type: string) => {
-    switch (type) {
-      case 'video': return <VideoCameraIcon className="h-4 w-4" />
-      case 'phone': return <PhoneIcon className="h-4 w-4" />
-      case 'in-person': return <MapPinIcon className="h-4 w-4" />
-      default: return <CalendarIcon className="h-4 w-4" />
-    }
+  // Order: soonest upcoming dated round first; then needs-action groups; then
+  // most recent activity.
+  visibleGroups.sort((a, b) => {
+    if (a.soonestUpcoming !== b.soonestUpcoming) return a.soonestUpcoming - b.soonestUpcoming
+    const aNeeds = a.needsActionCount > 0 ? 0 : 1
+    const bNeeds = b.needsActionCount > 0 ? 0 : 1
+    if (aNeeds !== bNeeds) return aNeeds - bNeeds
+    return b.latestActivity - a.latestActivity
+  })
+
+  // Nearest-upcoming group (first finite soonestUpcoming) is expanded by default.
+  const nearestUpcomingId = visibleGroups.find(g => Number.isFinite(g.soonestUpcoming))?.application.id
+  const isExpanded = (g: Group): boolean => {
+    const override = collapseOverrides[g.application.id]
+    if (override !== undefined) return override
+    return g.needsActionCount > 0 || g.application.id === nearestUpcomingId
   }
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return 'Date TBD'
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+  const toggleGroup = (id: string) =>
+    setCollapseOverrides(prev => {
+      const g = groups.find(x => x.application.id === id)
+      const currentlyExpanded = prev[id] !== undefined
+        ? prev[id]
+        : (!!g && (g.needsActionCount > 0 || id === nearestUpcomingId))
+      return { ...prev, [id]: !currentlyExpanded }
     })
-  }
 
-  // Build a Google Calendar "add event" link from a dated interview. Floating
-  // local clock time (the stored scheduledTime), 1-hour default duration.
-  const googleCalUrl = (iv: Interview) => {
-    if (!iv.scheduledDate) return '#'
-    const day = iv.scheduledDate.slice(0, 10)
-    const time = iv.scheduledTime && /^\d{2}:\d{2}$/.test(iv.scheduledTime) ? iv.scheduledTime : '12:00'
-    const [y, m, d] = day.split('-').map(Number)
-    const [hh, mm] = time.split(':').map(Number)
-    const start = new Date(Date.UTC(y, m - 1, d, hh, mm))
-    const end = new Date(start.getTime() + 60 * 60 * 1000)
-    const fmt = (dt: Date) =>
-      `${dt.getUTCFullYear()}${String(dt.getUTCMonth() + 1).padStart(2, '0')}${String(dt.getUTCDate()).padStart(2, '0')}T${String(dt.getUTCHours()).padStart(2, '0')}${String(dt.getUTCMinutes()).padStart(2, '0')}00`
-    const title = `Interview: ${iv.application?.company || 'Company'}${iv.application?.role ? ' — ' + iv.application.role : ''}`
-    const params = new URLSearchParams({
-      action: 'TEMPLATE',
-      text: title,
-      dates: `${fmt(start)}/${fmt(end)}`,
-      details: `${iv.interviewType} interview (round ${iv.round})`,
-    })
-    return `https://calendar.google.com/calendar/render?${params.toString()}`
-  }
-
-  // A date-TBD interview (needs_scheduling or null date) is OPEN: shown in
-  // Upcoming so the user can schedule/confirm it, never bucketed as Past.
-  const needsScheduling = (i: Interview) =>
-    (i.status === 'needs_scheduling' || !i.scheduledDate) &&
-    i.status !== 'completed' && i.status !== 'cancelled'
-  const isUpcomingDated = (i: Interview) =>
-    !!i.scheduledDate && new Date(i.scheduledDate) > new Date() &&
-    ['scheduled', 'rescheduled'].includes(i.status)
-  const isOpenUpcoming = (i: Interview) => needsScheduling(i) || isUpcomingDated(i)
-
-  const upcomingInterviews = interviews.filter(i => !i.archived && isOpenUpcoming(i))
-  const pastInterviews = interviews.filter(i => !i.archived && !isOpenUpcoming(i))
-  const archivedInterviews = interviews.filter(i => i.archived)
-
-  const displayInterviews = filter === 'upcoming' ? upcomingInterviews :
-                           filter === 'completed' ? pastInterviews :
-                           filter === 'archived' ? archivedInterviews :
-                           interviews.filter(i => !i.archived)
+  const upcomingCount = interviews.filter(i => !i.archived && isOpenUpcoming(i)).length
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800">
         <div className="animate-pulse space-y-4">
-          <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/4"></div>
+          <div className="h-8 w-1/4 rounded bg-gray-200 dark:bg-gray-700" />
           <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
-            ))}
+            {[1, 2, 3].map((i) => <div key={i} className="h-20 rounded bg-gray-200 dark:bg-gray-700" />)}
           </div>
         </div>
       </div>
@@ -280,13 +207,13 @@ export default function InterviewsSection({
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-      <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-4">
+    <div className="rounded-lg bg-white shadow dark:bg-gray-800">
+      <div className="border-b border-gray-200 p-6 dark:border-gray-700">
+        <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <CalendarIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Interviews</h2>
-            <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm px-2 py-0.5 rounded-full">
+            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-sm text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
               {interviews.length}
             </span>
           </div>
@@ -294,7 +221,7 @@ export default function InterviewsSection({
             <SummaryEmailButton />
             <button
               onClick={() => onCreateInterview()}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700"
             >
               <PlusIcon className="h-5 w-5" />
               <span className="hidden sm:inline">Add Interview</span>
@@ -307,17 +234,15 @@ export default function InterviewsSection({
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 filter === f
                   ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'
               }`}
             >
               {f === 'all' ? 'All' : f === 'upcoming' ? 'Upcoming' : f === 'completed' ? 'Past' : 'Archived'}
-              {f === 'upcoming' && upcomingInterviews.length > 0 && (
-                <span className="ml-2 bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded-full">
-                  {upcomingInterviews.length}
-                </span>
+              {f === 'upcoming' && upcomingCount > 0 && (
+                <span className="ml-2 rounded-full bg-blue-600 px-1.5 py-0.5 text-xs text-white">{upcomingCount}</span>
               )}
             </button>
           ))}
@@ -325,312 +250,36 @@ export default function InterviewsSection({
       </div>
 
       <div className="divide-y divide-gray-200 dark:divide-gray-700">
-        {displayInterviews.length === 0 ? (
+        {visibleGroups.length === 0 ? (
           <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-            <CalendarIcon className="h-12 w-12 mx-auto mb-3 opacity-50" />
+            <CalendarIcon className="mx-auto mb-3 h-12 w-12 opacity-50" />
             <p className="text-lg font-medium">No interviews found</p>
-            <p className="text-sm mt-1">
+            <p className="mt-1 text-sm">
               {filter === 'upcoming'
                 ? 'Schedule your next interview to see it here'
                 : 'Add interviews to track your progress'}
             </p>
           </div>
         ) : (
-          displayInterviews.map((interview) => (
-            <div key={interview.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <BuildingOfficeIcon className="h-4 w-4 text-gray-400" />
-                    <Link
-                      href={`/applications/${interview.applicationId}`}
-                      className="font-medium text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
-                    >
-                      {interview.application?.company || 'Unknown Company'}
-                    </Link>
-                    <span className="text-gray-400">•</span>
-                    <span className="text-gray-600 dark:text-gray-300">
-                      {interview.application?.role || 'Unknown Role'}
-                    </span>
-                    {interview.application?.jobUrl && (
-                      <a
-                        href={interview.application.jobUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        title="Open original job posting"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
-                      >
-                        <ArrowTopRightOnSquareIcon className="h-4 w-4" />
-                      </a>
-                    )}
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <CalendarIcon className="h-4 w-4" />
-                      {formatDate(interview.scheduledDate)}
-                    </span>
-                    {interview.scheduledTime && (
-                      <span className="flex items-center gap-1">
-                        <ClockIcon className="h-4 w-4" />
-                        {interview.scheduledTime}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      {getInterviewTypeIcon(interview.interviewType)}
-                      <span className="capitalize">{interview.interviewType}</span>
-                    </span>
-                    <span className="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs">
-                      Round {interview.round}
-                    </span>
-                  </div>
-
-                  {interview.scheduledDate && (
-                    <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-                      <a
-                        href={`/api/interviews/${interview.id}/ics`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        <CalendarIcon className="h-3.5 w-3.5" /> Add to calendar
-                      </a>
-                      <a
-                        href={googleCalUrl(interview)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        <ArrowTopRightOnSquareIcon className="h-3.5 w-3.5" /> Google Calendar
-                      </a>
-                    </div>
-                  )}
-
-                  {(interview.interviewers?.length ?? 0) > 0 && (
-                    <div className="flex items-center gap-2 mt-2 text-sm text-gray-500 dark:text-gray-400">
-                      <UserGroupIcon className="h-4 w-4" />
-                      <span>{interview.interviewers.map(i => i.name).join(', ')}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  {getOutcomeIcon(interview.outcome || undefined)}
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
-                    {interview.status.replace(/_/g, ' ')}
-                  </span>
-                  {interview.aiAnalysis && (
-                    <SparklesIcon className="h-5 w-5 text-purple-500" title="AI Analysis Available" />
-                  )}
-                  <button
-                    onClick={() => archiveInterview(interview.id, !interview.archived)}
-                    title={interview.archived ? 'Unarchive' : 'Archive'}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                  >
-                    {interview.archived ? (
-                      <ArrowUturnLeftIcon className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <ArchiveBoxIcon className="h-5 w-5 text-gray-400" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setExpandedId(expandedId === interview.id ? null : interview.id)}
-                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-                  >
-                    {expandedId === interview.id ? (
-                      <ChevronUpIcon className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <ChevronDownIcon className="h-5 w-5 text-gray-400" />
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {interview.autoDetected && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-900/20">
-                  <span className="flex items-center gap-1.5 text-sm text-amber-800 dark:text-amber-300">
-                    <SparklesIcon className="h-4 w-4" />
-                    {interview.scheduledDate
-                      ? 'Auto-detected from your email — review the date/time, then confirm.'
-                      : 'Auto-detected from your email — add the date, then confirm.'}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => onOpenInterviewDetail(interview)}
-                      className="px-3 py-1 text-sm font-medium text-amber-800 hover:underline dark:text-amber-300"
-                    >
-                      Review
-                    </button>
-                    <button
-                      onClick={() => confirmAutoDetected(interview.id)}
-                      className="flex items-center gap-1 rounded-lg bg-amber-600 px-3 py-1 text-sm font-medium text-white hover:bg-amber-700"
-                    >
-                      <CheckCircleIcon className="h-4 w-4" />
-                      Confirm
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {expandedId === interview.id && (
-                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 space-y-4">
-                  <div>
-                    {interview.prepBrief ? (
-                      <div className="rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/20 p-3 space-y-2 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-1.5 font-medium text-purple-800 dark:text-purple-300">
-                            <SparklesIcon className="h-4 w-4" /> AI interview prep
-                          </span>
-                          <button
-                            onClick={() => prepInterview(interview.id, true)}
-                            disabled={preppingId === interview.id}
-                            className="text-xs text-purple-700 dark:text-purple-400 hover:underline disabled:opacity-50"
-                          >
-                            {preppingId === interview.id ? 'Regenerating…' : 'Regenerate'}
-                          </button>
-                        </div>
-                        {interview.prepBrief.companyBrief && (
-                          <p className="text-gray-700 dark:text-gray-300">{interview.prepBrief.companyBrief}</p>
-                        )}
-                        {Array.isArray(interview.prepBrief.likelyQuestions) && interview.prepBrief.likelyQuestions.length > 0 && (
-                          <div>
-                            <div className="font-medium text-gray-900 dark:text-white">Likely questions</div>
-                            <ul className="list-disc list-inside text-gray-700 dark:text-gray-300">
-                              {interview.prepBrief.likelyQuestions.map((q: string, i: number) => <li key={i}>{q}</li>)}
-                            </ul>
-                          </div>
-                        )}
-                        {Array.isArray(interview.prepBrief.talkingPoints) && interview.prepBrief.talkingPoints.length > 0 && (
-                          <div>
-                            <div className="font-medium text-gray-900 dark:text-white">Talking points</div>
-                            <ul className="list-disc list-inside text-gray-700 dark:text-gray-300">
-                              {interview.prepBrief.talkingPoints.map((q: string, i: number) => <li key={i}>{q}</li>)}
-                            </ul>
-                          </div>
-                        )}
-                        {Array.isArray(interview.prepBrief.questionsToAsk) && interview.prepBrief.questionsToAsk.length > 0 && (
-                          <div>
-                            <div className="font-medium text-gray-900 dark:text-white">Questions to ask them</div>
-                            <ul className="list-disc list-inside text-gray-700 dark:text-gray-300">
-                              {interview.prepBrief.questionsToAsk.map((q: string, i: number) => <li key={i}>{q}</li>)}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => prepInterview(interview.id, false)}
-                        disabled={preppingId === interview.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600 text-white text-sm hover:bg-purple-700 disabled:opacity-50"
-                      >
-                        <SparklesIcon className="h-4 w-4" /> {preppingId === interview.id ? 'Preparing…' : 'Prep me with AI'}
-                      </button>
-                    )}
-                    {prepError && preppingId !== interview.id && <p className="mt-1 text-xs text-red-500">{prepError}</p>}
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    {interview.stage && (
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">Stage:</span>
-                        <span className="ml-2 text-gray-900 dark:text-white capitalize">{interview.stage}</span>
-                      </div>
-                    )}
-                    {interview.location && (
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">Location:</span>
-                        <span className="ml-2 text-gray-900 dark:text-white">{interview.location}</span>
-                      </div>
-                    )}
-                    {interview.duration && (
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">Duration:</span>
-                        <span className="ml-2 text-gray-900 dark:text-white">{interview.duration} min</span>
-                      </div>
-                    )}
-                    {interview.outcome && (
-                      <div>
-                        <span className="text-gray-500 dark:text-gray-400">Outcome:</span>
-                        <span className="ml-2 text-gray-900 dark:text-white capitalize">{interview.outcome.replace('_', ' ')}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {(interview.interviewers?.length ?? 0) > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2">Interviewers</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {interview.interviewers.map((interviewer) => (
-                          <div key={interviewer.id} className="bg-gray-100 dark:bg-gray-700 rounded-lg px-3 py-2 text-sm">
-                            <span className="font-medium text-gray-900 dark:text-white">{interviewer.name}</span>
-                            {interviewer.title && (
-                              <span className="text-gray-500 dark:text-gray-400 ml-1">({interviewer.title})</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {(interview.preparationNotes || interview.postInterviewNotes) && (
-                    <div className="space-y-2">
-                      {interview.preparationNotes && (
-                        <div>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">Prep Notes: </span>
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {interview.preparationNotes.substring(0, 150)}
-                            {interview.preparationNotes.length > 150 ? '...' : ''}
-                          </span>
-                        </div>
-                      )}
-                      {interview.postInterviewNotes && (
-                        <div>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">Post-Interview Notes: </span>
-                          <span className="text-sm text-gray-600 dark:text-gray-400">
-                            {interview.postInterviewNotes.substring(0, 150)}
-                            {interview.postInterviewNotes.length > 150 ? '...' : ''}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {interview.followUpSteps && interview.followUpSteps.length > 0 && (
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-                        <SparklesIcon className="h-4 w-4 text-purple-500" />
-                        AI Suggested Follow-ups
-                      </h4>
-                      <ul className="space-y-1">
-                        {interview.followUpSteps.slice(0, 3).map((step, idx) => (
-                          <li key={idx} className="flex items-start gap-2 text-sm">
-                            <span className={`px-1.5 py-0.5 rounded text-xs ${
-                              step.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
-                              step.priority === 'medium' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300' :
-                              'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                            }`}>
-                              {step.priority}
-                            </span>
-                            <span className="text-gray-600 dark:text-gray-400">{step.action}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      onClick={() => onOpenInterviewDetail(interview)}
-                      className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                    >
-                      <DocumentTextIcon className="h-4 w-4" />
-                      View Details
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+          visibleGroups.map((g) => (
+            <ApplicationPipeline
+              key={g.application.id}
+              application={g.application}
+              allInterviews={g.all}
+              visibleInterviews={g.visible}
+              expanded={isExpanded(g)}
+              onToggleCollapse={() => toggleGroup(g.application.id)}
+              expandedRoundId={expandedRoundId}
+              onToggleRound={(id) => setExpandedRoundId(expandedRoundId === id ? null : id)}
+              onCreateInterview={onCreateInterview}
+              onOpenDetail={onOpenInterviewDetail}
+              onConfirm={confirmAutoDetected}
+              onArchive={archiveInterview}
+              onPrep={prepInterview}
+              preppingId={preppingId}
+              prepError={prepError}
+              needsActionCount={g.needsActionCount}
+            />
           ))
         )}
       </div>
