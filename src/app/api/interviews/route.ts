@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { createInterviewWithRound } from "@/lib/interview-rounds"
 
 // GET - List all interviews for the current user
 export async function GET(request: NextRequest) {
@@ -82,42 +83,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Application not found" }, { status: 404 })
     }
 
-    // Create the interview
-    const interview = await prisma.interview.create({
-      data: {
-        applicationId: data.applicationId,
-        scheduledDate: new Date(data.scheduledDate),
-        scheduledTime: data.scheduledTime || null,
-        duration: data.duration || null,
-        interviewType: data.interviewType || "video",
-        round: data.round || 1,
-        stage: data.stage || null,
-        location: data.location || null,
-        meetingLink: data.meetingLink || null,
-        status: 'scheduled',
-        preparationNotes: data.preparationNotes || null,
-        interviewers: data.interviewers?.length > 0 ? {
-          create: data.interviewers.map((interviewer: { name: string; title?: string; department?: string; email?: string; linkedInUrl?: string }) => ({
-            name: interviewer.name,
-            title: interviewer.title || null,
-            department: interviewer.department || null,
-            email: interviewer.email || null,
-            linkedInUrl: interviewer.linkedInUrl || null,
-          })),
-        } : undefined,
-      },
-      include: {
-        interviewers: true,
-      },
+    // Round is assigned by the helper (monotonic, race-safe), never by the
+    // client. A missing date is a valid "needs scheduling" create — guard
+    // against new Date(undefined) becoming an Invalid Date / 1970.
+    const { id } = await createInterviewWithRound(data.applicationId, {
+      scheduledDate: data.scheduledDate ? new Date(data.scheduledDate) : null,
+      scheduledTime: data.scheduledTime || null,
+      duration: data.duration || null,
+      interviewType: data.interviewType || "video",
+      stage: data.stage || null,
+      location: data.location || null,
+      meetingLink: data.meetingLink || null,
+      status: data.scheduledDate ? 'scheduled' : 'needs_scheduling',
+      preparationNotes: data.preparationNotes || null,
+      interviewers: data.interviewers?.length > 0 ? {
+        create: data.interviewers.map((interviewer: { name: string; title?: string; department?: string; email?: string; linkedInUrl?: string }) => ({
+          name: interviewer.name,
+          title: interviewer.title || null,
+          department: interviewer.department || null,
+          email: interviewer.email || null,
+          linkedInUrl: interviewer.linkedInUrl || null,
+        })),
+      } : undefined,
     })
 
-    // Update application status to INTERVIEWING if not already
-    if (application.status !== "INTERVIEWING") {
-      await prisma.application.update({
-        where: { id: application.id },
-        data: { status: "INTERVIEWING" },
-      })
-    }
+    // recomputeApplicationStatus (inside the helper) promotes the application to
+    // INTERVIEWING for this confirmed create.
+    const interview = await prisma.interview.findUnique({
+      where: { id },
+      include: { interviewers: true },
+    })
 
     return NextResponse.json({ success: true, interview })
   } catch (error) {

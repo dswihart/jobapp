@@ -192,7 +192,6 @@ export default function InterviewDetailModal({
           scheduledTime: formData.scheduledTime || null,
           duration: formData.duration ? parseInt(formData.duration) : null,
           interviewType: formData.interviewType,
-          round: formData.round,
           stage: formData.stage || null,
           location: formData.location || null,
           meetingLink: formData.meetingLink || null,
@@ -337,7 +336,8 @@ export default function InterviewDetailModal({
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  {interview.application?.company} - Round {interview.round}
+                  {interview.application?.company}
+                  {interview.stage ? ` — ${interview.stage}` : ''}
                 </h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                   {interview.application?.role}
@@ -465,21 +465,6 @@ export default function InterviewDetailModal({
                       <option value="panel">Panel Interview</option>
                       <option value="technical">Technical Interview</option>
                       <option value="behavioral">Behavioral Interview</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Round
-                    </label>
-                    <select
-                      value={formData.round}
-                      onChange={(e) => setFormData({ ...formData, round: parseInt(e.target.value) })}
-                      disabled={!editMode}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white disabled:opacity-60"
-                    >
-                      {[1, 2, 3, 4, 5].map((r) => (
-                        <option key={r} value={r}>Round {r}</option>
-                      ))}
                     </select>
                   </div>
                   <div>

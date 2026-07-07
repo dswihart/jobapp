@@ -3,6 +3,7 @@ import { createLLMClient } from '@/lib/llm-client'
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
 import { prisma } from '@/lib/prisma'
+import { createInterviewWithRound } from '@/lib/interview-rounds'
 
 /**
  * Email Sync — monitors the user's Gmail inbox for messages related to their
@@ -577,22 +578,52 @@ export async function syncApplicationEmailsForUser(
             select: { id: true },
           })
 
-          if (!existingInterview) {
-            await prisma.interview.create({
-              data: {
-                applicationId: matched.id,
+          const prepNote = `Auto-detected from email (${cand.receivedAt.toISOString().slice(0, 10)}): ${subject}`.slice(0, 500)
+
+          if (existingInterview) {
+            // Already tracked (dated within ±2d, or any open round when dateless)
+            // — nothing to do.
+          } else if (scheduledDate) {
+            // A dated invite arrived. If we already hold an open DATELESS round
+            // for this application (a prior "let's find a time" email), upgrade
+            // it in place rather than spawning a phantom second round. Keep it
+            // auto-detected + reminder-suppressed until the user confirms.
+            const openDateless = await prisma.interview.findFirst({
+              where: { applicationId: matched.id, status: 'needs_scheduling', scheduledDate: null },
+              orderBy: { createdAt: 'asc' },
+              select: { id: true },
+            })
+            if (openDateless) {
+              await prisma.interview.update({
+                where: { id: openDateless.id },
+                data: { scheduledDate, scheduledTime: verdict.interviewTime, status: 'scheduled' },
+              })
+              console.log(`[Email Sync] Upgraded a date-TBD interview for "${matched.company}" to ${scheduledDate.toISOString().slice(0, 10)} (pending user confirmation).`)
+            } else {
+              const { round } = await createInterviewWithRound(matched.id, {
                 scheduledDate,
-                scheduledTime: scheduledDate ? verdict.interviewTime : null,
+                scheduledTime: verdict.interviewTime,
                 interviewType: 'video',
-                round: 1,
-                status: scheduledDate ? 'scheduled' : 'needs_scheduling',
+                status: 'scheduled',
                 autoDetected: true,
                 reminderSentAt: new Date(), // suppress reminders until confirmed
-                preparationNotes: `Auto-detected from email (${cand.receivedAt.toISOString().slice(0, 10)}): ${subject}`.slice(0, 500),
-              },
+                preparationNotes: prepNote,
+              })
+              summary.createdInterviews++
+              console.log(`[Email Sync] Auto-created interview (round ${round}) for "${matched.company}" on ${scheduledDate.toISOString().slice(0, 10)} (pending user confirmation).`)
+            }
+          } else {
+            const { round } = await createInterviewWithRound(matched.id, {
+              scheduledDate: null,
+              scheduledTime: null,
+              interviewType: 'video',
+              status: 'needs_scheduling',
+              autoDetected: true,
+              reminderSentAt: new Date(), // suppress reminders until confirmed
+              preparationNotes: prepNote,
             })
             summary.createdInterviews++
-            console.log(`[Email Sync] Auto-created ${scheduledDate ? 'interview' : 'needs-scheduling interview'} for "${matched.company}"${scheduledDate ? ` on ${scheduledDate.toISOString().slice(0, 10)}` : ' (date TBD)'} (pending user confirmation).`)
+            console.log(`[Email Sync] Auto-created needs-scheduling interview (round ${round}) for "${matched.company}" (date TBD, pending user confirmation).`)
           }
         }
       }

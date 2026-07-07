@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { recomputeApplicationStatus } from "@/lib/interview-rounds"
 
 // GET - Get a single interview with all details
 export async function GET(
@@ -133,13 +134,17 @@ export async function PATCH(
       updateData.reminderSentAt = null
     }
 
-    // Update the interview
-    const interview = await prisma.interview.update({
-      where: { id },
-      data: updateData,
-      include: {
-        interviewers: true,
-      },
+    // Update the interview, then recompute the application status in the same
+    // transaction (confirming an auto-detected round promotes the app to
+    // INTERVIEWING; cancelling the last active round can downgrade it).
+    const interview = await prisma.$transaction(async (tx) => {
+      const updated = await tx.interview.update({
+        where: { id },
+        data: updateData,
+        include: { interviewers: true },
+      })
+      await recomputeApplicationStatus(tx, existingInterview.applicationId)
+      return updated
     })
 
     return NextResponse.json({ success: true, interview })
@@ -184,9 +189,11 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Delete the interview (cascade will delete interviewers)
-    await prisma.interview.delete({
-      where: { id },
+    // Delete the interview (cascade removes interviewers), then recompute the
+    // application status — delete-to-empty downgrades INTERVIEWING -> APPLIED.
+    await prisma.$transaction(async (tx) => {
+      await tx.interview.delete({ where: { id } })
+      await recomputeApplicationStatus(tx, interview.applicationId)
     })
 
     return NextResponse.json({ success: true })

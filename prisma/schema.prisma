@@ -518,6 +518,10 @@ model Interview {
   @@index([applicationId])
   @@index([scheduledDate])
   @@index([status])
+  // Ordered pipeline reads (grouped-by-application round rail). Non-unique for
+  // now; a @@unique([applicationId, round]) backstop is added in a later phase
+  // after the legacy duplicate rounds are renumbered.
+  @@index([applicationId, round])
   @@map("interviews")
 }
 
