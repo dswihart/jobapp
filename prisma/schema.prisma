@@ -518,10 +518,11 @@ model Interview {
   @@index([applicationId])
   @@index([scheduledDate])
   @@index([status])
-  // Ordered pipeline reads (grouped-by-application round rail). Non-unique for
-  // now; a @@unique([applicationId, round]) backstop is added in a later phase
-  // after the legacy duplicate rounds are renumbered.
-  @@index([applicationId, round])
+  // Ordered pipeline reads + integrity backstop: rounds are unique per
+  // application. Agrees with createInterviewWithRound (round = MAX over all the
+  // app's rows + 1, monotonic), so a cancelled/deleted top round never causes a
+  // duplicate. Applied as raw SQL unique index interviews_application_id_round_key.
+  @@unique([applicationId, round])
   @@map("interviews")
 }
 
