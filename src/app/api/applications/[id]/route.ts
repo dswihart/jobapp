@@ -62,7 +62,15 @@ export async function PUT(
       return NextResponse.json({ error: 'Application not found' }, { status: 404 })
     }
 
-    let finalAppliedDate = appliedDate ? new Date(appliedDate) : existing.appliedDate
+    // Date-only picks (YYYY-MM-DD) are stored at NOON UTC, not midnight, so the
+    // calendar day is unambiguous under any timezone bucketing (midnight is the
+    // fragile boundary that drifted applications a day off in the goal grid).
+    const normApplied = (v: unknown): Date | null => {
+      if (!v) return null
+      const s = String(v)
+      return /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00:00.000Z`) : new Date(s)
+    }
+    let finalAppliedDate = appliedDate ? normApplied(appliedDate) : existing.appliedDate
     if ((status === 'APPLIED' || status === 'INTERVIEWING') && !finalAppliedDate) {
       finalAppliedDate = new Date()
     }

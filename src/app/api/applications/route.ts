@@ -67,7 +67,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { company, role, status, notes, jobUrl, appliedDate, resumeId, coverLetterId } = body
 
-    let finalAppliedDate = appliedDate ? new Date(appliedDate) : null
+    // Date-only picks (YYYY-MM-DD) stored at NOON UTC (not midnight) so the
+    // calendar day is unambiguous under any timezone bucketing.
+    const normApplied = (v: unknown): Date | null => {
+      if (!v) return null
+      const s = String(v)
+      return /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00:00.000Z`) : new Date(s)
+    }
+    let finalAppliedDate = appliedDate ? normApplied(appliedDate) : null
     const finalStatus = status || 'APPLIED'
     if ((finalStatus === 'APPLIED' || finalStatus === 'INTERVIEWING') && !appliedDate) {
       finalAppliedDate = new Date()
