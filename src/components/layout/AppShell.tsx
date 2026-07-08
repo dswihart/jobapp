@@ -301,7 +301,7 @@ export default function AppShell() {
                 const d = a.appliedDate || a.createdAt
                 return d ? new Date(d).toDateString() === new Date().toDateString() : false
               }).length}
-              goal={user?.dailyApplicationGoal ?? 6}
+              goal={user?.dailyApplicationGoal ?? 4}
             />
           )}
           {renderContent()}

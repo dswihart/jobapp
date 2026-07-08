@@ -5,9 +5,37 @@
 // downloads an event AND subscribes to the feed gets an update-in-place rather
 // than a duplicate.
 //
-// Times are emitted as "floating" local time (no TZID / no Z) so an event shows
-// at the stated clock time in whatever calendar imports it — correct for a
-// single-timezone user, and matching the app's stored floating scheduledTime.
+// Timed events are emitted with an explicit TZID (Europe/Madrid) plus a
+// VTIMEZONE definition, NOT as floating local time. Subscribed .ics feeds in
+// Google Calendar interpret floating DTSTART as UTC, which shifted every event
+// by the viewer's offset (a 15:00 interview showed at 17:00 in summer). Binding
+// the stored wall-clock to Europe/Madrid makes Google/Apple render the correct
+// local time regardless of the device's timezone. The stored scheduledTime is
+// the canonical wall-clock; scheduledDate supplies only the calendar day.
+
+// The user's timezone. Single-user app → hardcoded; the stored clock times are
+// this zone's wall-clock. Standard EU DST rules (last Sun Mar / last Sun Oct).
+const APP_TZID = 'Europe/Madrid'
+const APP_VTIMEZONE = [
+  'BEGIN:VTIMEZONE',
+  `TZID:${APP_TZID}`,
+  'X-LIC-LOCATION:Europe/Madrid',
+  'BEGIN:DAYLIGHT',
+  'TZOFFSETFROM:+0100',
+  'TZOFFSETTO:+0200',
+  'TZNAME:CEST',
+  'DTSTART:19700329T020000',
+  'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU',
+  'END:DAYLIGHT',
+  'BEGIN:STANDARD',
+  'TZOFFSETFROM:+0200',
+  'TZOFFSETTO:+0100',
+  'TZNAME:CET',
+  'DTSTART:19701025T030000',
+  'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU',
+  'END:STANDARD',
+  'END:VTIMEZONE',
+]
 
 const pad = (n: number) => String(n).padStart(2, '0')
 export const esc = (s: string) => s.replace(/([,;\\])/g, '\\$1').replace(/\r?\n/g, '\\n')
@@ -57,13 +85,17 @@ export function buildVevent(
   let dtstart: string
   let dtend: string
   if (timeStr) {
+    // Emit the stored wall-clock bound to Europe/Madrid (TZID), plus a one-hour
+    // default duration. Compute the end time by wall-clock arithmetic (mod 24)
+    // so we never cross into UTC and reintroduce an offset bug.
     const [hh, mm] = timeStr.split(':').map(Number)
-    const start = new Date(Date.UTC(y, m - 1, d, hh, mm))
-    const end = new Date(start.getTime() + 60 * 60 * 1000)
-    const fmt = (dt: Date) =>
-      `${dt.getUTCFullYear()}${pad(dt.getUTCMonth() + 1)}${pad(dt.getUTCDate())}T${pad(dt.getUTCHours())}${pad(dt.getUTCMinutes())}00`
-    dtstart = `DTSTART:${fmt(start)}`
-    dtend = `DTEND:${fmt(end)}`
+    const endHh = (hh + 1) % 24
+    // If +1h wraps past midnight, the end lands on the next calendar day.
+    const endDay = hh + 1 >= 24 ? new Date(Date.UTC(y, m - 1, d + 1)) : new Date(Date.UTC(y, m - 1, d))
+    const startStamp = `${y}${pad(m)}${pad(d)}T${pad(hh)}${pad(mm)}00`
+    const endStamp = `${endDay.getUTCFullYear()}${pad(endDay.getUTCMonth() + 1)}${pad(endDay.getUTCDate())}T${pad(endHh)}${pad(mm)}00`
+    dtstart = `DTSTART;TZID=${APP_TZID}:${startStamp}`
+    dtend = `DTEND;TZID=${APP_TZID}:${endStamp}`
   } else {
     const next = new Date(Date.UTC(y, m - 1, d + 1))
     dtstart = `DTSTART;VALUE=DATE:${y}${pad(m)}${pad(d)}`
@@ -106,8 +138,10 @@ export function buildVcalendar(vevents: string[][], opts?: { name?: string }): s
     header.push(`X-WR-CALNAME:${esc(opts.name)}`)
     header.push(`NAME:${esc(opts.name)}`)
   }
+  header.push(`X-WR-TIMEZONE:${APP_TZID}`)
+  // VTIMEZONE must precede any VEVENT that references its TZID.
   const body = vevents.flat()
-  return [...header, ...body, 'END:VCALENDAR'].join('\r\n')
+  return [...header, ...APP_VTIMEZONE, ...body, 'END:VCALENDAR'].join('\r\n')
 }
 
 // Stable DTSTAMP for a whole document build.

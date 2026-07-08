@@ -110,6 +110,7 @@ export default function StatsPage() {
   const [last14DaysTotal, setLast14DaysTotal] = useState(0)
   const [last14DaysInterviews, setLast14DaysInterviews] = useState(0)
   const [todayCount, setTodayCount] = useState(0)
+  const [todayInterviews, setTodayInterviews] = useState(0)
 
   useEffect(() => {
     fetchStats()
@@ -128,7 +129,7 @@ export default function StatsPage() {
   useEffect(() => {
     const userId = userData?.id
     if (!userId) return
-    const dailyGoal = userData?.dailyApplicationGoal || 6
+    const dailyGoal = userData?.dailyApplicationGoal ?? 4
     let cancelled = false
 
     ;(async () => {
@@ -137,17 +138,19 @@ export default function StatsPage() {
         if (!response.ok) return
         const data = await response.json()
         const dailyStats: Array<{ date: string; count: number; interviews?: number }> = Array.isArray(data?.dailyStats) ? data.dailyStats : []
+        // The daily goal counts applications submitted AND interviews that day.
         const goalData = dailyStats.map(day => ({
           date: day.date,
           count: day.count || 0,
           interviews: day.interviews || 0,
-          goalMet: (day.count || 0) >= dailyGoal
+          goalMet: ((day.count || 0) + (day.interviews || 0)) >= dailyGoal
         }))
         if (cancelled) return
         setPastDaysGoals(goalData)
         setLast14DaysTotal(goalData.reduce((sum, day) => sum + day.count, 0))
         setLast14DaysInterviews(goalData.reduce((sum, day) => sum + day.interviews, 0))
         setTodayCount(goalData.length ? goalData[goalData.length - 1].count : 0)
+        setTodayInterviews(goalData.length ? goalData[goalData.length - 1].interviews : 0)
       } catch (error) {
         console.error('Failed to load daily stats:', error)
       }
@@ -237,7 +240,9 @@ export default function StatsPage() {
     ARCHIVED: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
   }
 
-  const dailyGoal = userData?.dailyApplicationGoal || 6
+  const dailyGoal = userData?.dailyApplicationGoal ?? 4
+  const todayProgress = todayCount + todayInterviews
+  const last14DaysProgress = last14DaysTotal + last14DaysInterviews
 
   if (loading) {
     return (
@@ -298,10 +303,11 @@ export default function StatsPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className={`text-3xl font-bold ${todayCount >= dailyGoal ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
-                    {todayCount}
+                  <div className={`text-3xl font-bold ${todayProgress >= dailyGoal ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                    {todayProgress}
                   </div>
                   <div className="text-xs text-gray-500">/ {dailyGoal} goal</div>
+                  <div className="text-[11px] text-gray-400">{todayCount} applied · {todayInterviews} 🎙️</div>
                 </div>
               </div>
             </div>
@@ -309,20 +315,14 @@ export default function StatsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Last {gridDays} Days</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">Applications &middot; Interviews</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">Applications + interviews</p>
                 </div>
                 <div className="text-right">
-                  <div className="flex items-baseline justify-end gap-3">
-                    <div>
-                      <span className="text-3xl font-bold text-gray-900 dark:text-white">{last14DaysTotal}</span>
-                      <span className="text-xs text-gray-500 ml-1">apps</span>
-                    </div>
-                    <div>
-                      <span className="text-3xl font-bold text-purple-600 dark:text-purple-400">{last14DaysInterviews}</span>
-                      <span className="text-xs text-gray-500 ml-1">🎙️</span>
-                    </div>
+                  <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                    {last14DaysProgress}
+                    <span className="text-sm font-normal text-gray-500"> / {dailyGoal * gridDays}</span>
                   </div>
-                  <div className="text-xs text-gray-500">/ {dailyGoal * gridDays} application goal</div>
+                  <div className="text-[11px] text-gray-400">{last14DaysTotal} applied · {last14DaysInterviews} 🎙️</div>
                 </div>
               </div>
             </div>
@@ -331,7 +331,7 @@ export default function StatsPage() {
           {/* 14-day grid */}
           <div className="border-t dark:border-gray-700 p-4 sm:p-6">
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 text-center">
-              Past {gridDays} Days Goal Tracker ({dailyGoal} applications/day)
+              Past {gridDays} Days Goal Tracker ({dailyGoal}/day · applications + interviews)
             </h3>
             <div className="grid grid-cols-7 gap-2 sm:gap-3 max-w-6xl mx-auto">
               {pastDaysGoals.map((day, index) => {
@@ -344,7 +344,7 @@ export default function StatsPage() {
                 return (
                   <div
                     key={index}
-                    title={`${weekday} ${monthShort} ${dayNum}: ${day.count} application${day.count === 1 ? '' : 's'}${day.interviews ? `, ${day.interviews} interview${day.interviews === 1 ? '' : 's'}` : ''}`}
+                    title={`${weekday} ${monthShort} ${dayNum}: ${day.count} application${day.count === 1 ? '' : 's'} + ${day.interviews} interview${day.interviews === 1 ? '' : 's'} = ${day.count + day.interviews} toward goal of ${dailyGoal}`}
                     className={`min-h-[88px] sm:min-h-[124px] px-2 py-3 sm:px-3 sm:py-4 flex flex-col items-center justify-center rounded-xl text-center border shadow-sm ${
                       isToday
                         ? "bg-blue-100 dark:bg-blue-900 border-blue-500 dark:border-blue-400"
@@ -361,16 +361,16 @@ export default function StatsPage() {
                     <div className={`text-base sm:text-2xl font-bold ${
                       day.goalMet
                         ? "text-green-700 dark:text-green-400"
-                        : day.count >= 2
+                        : (day.count + day.interviews) >= 2
                           ? "text-yellow-700 dark:text-yellow-400"
                           : "text-red-700 dark:text-red-400"
                     }`}>
-                      {day.count}
+                      {day.count + day.interviews}
                     </div>
                     {day.interviews > 0 && (
                       <div
                         className="mt-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-[9px] sm:text-xs font-semibold leading-none"
-                        title={`${day.interviews} interview${day.interviews === 1 ? '' : 's'} scheduled/completed`}
+                        title={`includes ${day.interviews} interview${day.interviews === 1 ? '' : 's'}`}
                       >
                         🎙️ {day.interviews}
                       </div>

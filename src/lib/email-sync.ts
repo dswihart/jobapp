@@ -182,6 +182,7 @@ async function classifyEmailWithAI(input: {
   subject: string
   body: string
   companies: string[]
+  receivedAt: Date
 }): Promise<AiEmailVerdict | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return null
@@ -201,11 +202,11 @@ Respond with ONLY a JSON object, no prose:
   "role": "job title if mentioned, or null",
   "summary": "one short sentence describing the email",
   "confidence": 0-100,
-  "interviewDate": "the SCHEDULED interview date as YYYY-MM-DD, ONLY if the email states/confirms a specific calendar date for an interview or call; otherwise null. Do NOT guess, and do NOT use the email's sent date.",
-  "interviewTime": "the interview start time as HH:MM in 24-hour clock if a specific time is stated; otherwise null"
+  "interviewDate": "the SCHEDULED interview date as YYYY-MM-DD, if the email states/confirms a specific date for an interview or call — including RELATIVE ones you can resolve from the reference date below; otherwise null. Do NOT invent a date the email does not reference, and do NOT use the email's sent date as the interview date.",
+  "interviewTime": "the interview start time as HH:MM in 24-hour clock if a specific time is stated; otherwise null. If a timezone is given (e.g. CEST, CET, CST), keep the clock time AS STATED — do not convert."
 }
 
-Today's date is ${new Date().toISOString().slice(0, 10)} (use it only to resolve a stated weekday like \"this Thursday\" into a YYYY-MM-DD; never invent a date that isn't in the email).
+This email was received on ${input.receivedAt.toISOString().slice(0, 10)}. Use that as the reference date to resolve any RELATIVE date the email states — \"today\", \"tomorrow\", \"this Thursday\", \"next Monday\", \"in two days\" — into an absolute YYYY-MM-DD for interviewDate. Only resolve a date the email actually references; never invent one.
 
 From: ${input.fromName || ''} <${input.fromAddress || ''}>
 Subject: ${input.subject}
@@ -446,6 +447,7 @@ export async function syncApplicationEmailsForUser(
           subject,
           body: text,
           companies: companyNames,
+          receivedAt: cand.receivedAt,
         })
         if (!verdict) {
           // AI unavailable — fall back to keywords so we still capture obvious mail.

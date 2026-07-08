@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     })
 
     const dailyStats = []
-    const dailyGoal = user.dailyApplicationGoal || 5
+    const dailyGoal = user.dailyApplicationGoal ?? 4
 
     for (let i = 6; i >= 0; i--) {
       const date = new Date()

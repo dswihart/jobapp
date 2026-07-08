@@ -35,7 +35,7 @@ export async function GET() {
       .map(user => ({
       userId: user.id,
       userName: user.name || 'User',
-      dailyGoal: 5,
+      dailyGoal: 4,
       totalApplications: user._count.applications
       }))
 

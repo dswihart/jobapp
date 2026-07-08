@@ -36,7 +36,7 @@ model User {
   maxJobAgeDays        Int?     @default(7)
   autoScan             Boolean? @default(true)
   scanFrequency        String?  @default("daily")
-  dailyApplicationGoal Int?     @default(6)
+  dailyApplicationGoal Int?     @default(4)
   emailSyncEnabled     Boolean? @default(false) @map("email_sync_enabled")
   // Opaque token for the subscribable interview calendar feed
   // (/api/calendar/[token]/interviews.ics). Nullable = feed not yet minted.

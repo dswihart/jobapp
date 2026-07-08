@@ -32,6 +32,7 @@ interface Stats {
   dailyStats?: Array<{
     date: string
     count: number
+    interviews?: number
     dayLabel: string
   }>
 }
@@ -306,7 +307,7 @@ export default function LoginPage() {
 
   const displayStats = currentUserStats || stats
   const enhancedMetrics = getEnhancedMetrics(displayStats)
-  const dailyGoal = currentUserStats?.dailyGoal || 5
+  const dailyGoal = currentUserStats?.dailyGoal || 4
   const hasSelectedUser = true
 
   const formatInterviewDate = (dateValue: string) => {
@@ -368,7 +369,7 @@ export default function LoginPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
             <div className="text-center mb-3">
               <h2 className="text-base sm:text-lg font-bold text-neutral-900 dark:text-neutral-50">
-                Last 16 Days - Goal Achievement ({dailyGoal} Applications/Day)
+                Last 16 Days - Goal Achievement ({dailyGoal}/day · applications + interviews)
               </h2>
             </div>
 
@@ -380,7 +381,9 @@ export default function LoginPage() {
                   const monthShort = date.toLocaleDateString("en-US", { month: "short" })
                   const weekday = date.toLocaleDateString("en-US", { weekday: "short" })
                   const count = day.count || 0
-                  const goalMet = count >= dailyGoal
+                  const interviews = day.interviews || 0
+                  const progress = count + interviews
+                  const goalMet = progress >= dailyGoal
                   const isToday = date.toDateString() === new Date().toDateString()
 
                   return (
@@ -391,7 +394,7 @@ export default function LoginPage() {
                           ? "bg-blue-100 dark:bg-blue-900 border border-blue-500 dark:border-blue-400"
                           : goalMet
                             ? "bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-600"
-                            : count >= 2
+                            : progress >= 2
                               ? "bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-600"
                               : "bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-600"
                       )}
@@ -406,9 +409,9 @@ export default function LoginPage() {
                         {dayNum}
                       </div>
                       <div className={"text-base sm:text-2xl font-bold " + (
-                        goalMet ? "text-green-700 dark:text-green-400" : count >= 2 ? "text-yellow-700 dark:text-yellow-400" : "text-red-700 dark:text-red-400"
+                        goalMet ? "text-green-700 dark:text-green-400" : progress >= 2 ? "text-yellow-700 dark:text-yellow-400" : "text-red-700 dark:text-red-400"
                       )}>
-                        {count}
+                        {progress}
                       </div>
                     </div>
                   )
@@ -490,7 +493,7 @@ export default function LoginPage() {
 
                 <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-xl p-4 sm:p-5 text-center border border-green-200 dark:border-green-800">
                   <div className="text-3xl sm:text-4xl font-bold text-green-600 dark:text-green-400">
-                    {displayStats.dailyStats.slice(-16).filter(day => day.count >= dailyGoal).length}
+                    {displayStats.dailyStats.slice(-16).filter(day => (day.count || 0) + (day.interviews || 0) >= dailyGoal).length}
                   </div>
                   <div className="text-sm text-green-700 dark:text-green-300 mt-1 font-medium">
                     Days Goal Met

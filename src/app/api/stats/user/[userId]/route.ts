@@ -31,6 +31,7 @@ export async function GET(
       select: {
         name: true,
         email: true,
+        dailyApplicationGoal: true,
       }
     })
 
@@ -117,7 +118,7 @@ export async function GET(
     return NextResponse.json({
       userId,
       userName: user.name || 'User',
-      dailyGoal: 5,
+      dailyGoal: user.dailyApplicationGoal ?? 4,
       total,
       byStatus: {
         DRAFT: byStatus.DRAFT || 0,

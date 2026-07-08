@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
       })
 
       const weeklyApplications = applications.length
-      const dailyGoal = 5
+      const dailyGoal = 4
       const userName = user?.name || 'there'
 
       userContext = `User: ${userName}
