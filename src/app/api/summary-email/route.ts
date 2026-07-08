@@ -21,8 +21,9 @@ export async function POST() {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true },
+      select: { email: true, dailyApplicationGoal: true },
     })
+    const dailyGoal = user?.dailyApplicationGoal ?? 4
     // Only ever email the signed-in user's OWN address — never a shared fallback
     // mailbox, which in this multi-user app would leak one user's digest to another.
     const toEmail = user?.email
@@ -67,6 +68,19 @@ export async function POST() {
         })
       : []
 
+    // A round is "passed" when the application has a LATER, non-cancelled round
+    // than this one — advancing to a next round implies you cleared this one. Used
+    // to show ✅ Passed even when the user never manually set the outcome.
+    const activeStatus = (s: string | null) => s !== 'cancelled' && s !== 'canceled'
+    const hasLaterRound = (i: { applicationId: string; round: number; scheduledDate: Date | null }) =>
+      interviews.some(
+        s =>
+          s.applicationId === i.applicationId &&
+          activeStatus(s.status) &&
+          (s.round > i.round ||
+            (s.scheduledDate != null && i.scheduledDate != null && s.scheduledDate.getTime() > i.scheduledDate.getTime() && s.round !== i.round))
+      )
+
     // "Done" = already happened in the last 14 days and not cancelled (covers
     // past interviews whether or not the user marked them completed).
     const completedInterviews = interviews
@@ -79,7 +93,9 @@ export async function POST() {
           role: app?.role || 'Unknown role',
           date: i.scheduledDate,
           round: i.round,
-          outcome: i.outcome,
+          // Inferred pass: a later round exists, so this one was cleared.
+          outcome: i.outcome || (hasLaterRound(i) ? 'passed' : null),
+          inferred: !i.outcome && hasLaterRound(i),
           status: i.status,
         }
       })
@@ -143,6 +159,36 @@ export async function POST() {
       nextMonth: forecastByMonthEnd(endNextMonth),
     }
 
+    // Days in the 2-week window where (applications applied + interviews that day)
+    // met the daily goal. Bucketed by calendar day; cancelled interviews excluded.
+    const windowDays = 14
+    const perDay = new Map<string, number>()
+    for (const a of appsSent) {
+      if (!a.appliedDate) continue
+      const k = a.appliedDate.toISOString().slice(0, 10)
+      perDay.set(k, (perDay.get(k) || 0) + 1)
+    }
+    for (const i of interviews) {
+      if (i.status === 'cancelled' || i.status === 'canceled') continue
+      if (i.scheduledDate == null || i.scheduledDate < rangeStart || i.scheduledDate > now) continue
+      const k = i.scheduledDate.toISOString().slice(0, 10)
+      perDay.set(k, (perDay.get(k) || 0) + 1)
+    }
+    let daysGoalMet = 0
+    for (const v of perDay.values()) if (v >= dailyGoal) daysGoalMet++
+
+    // Ordered per-day series for the streak strip (oldest -> newest, ending today).
+    const series: Array<{ value: number; met: boolean; isToday: boolean }> = []
+    let totalActions = 0
+    const todayKey = now.toISOString().slice(0, 10)
+    for (let i = windowDays - 1; i >= 0; i--) {
+      const k = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+      const v = perDay.get(k) || 0
+      totalActions += v
+      series.push({ value: v, met: v >= dailyGoal, isToday: k === todayKey })
+    }
+    const avgPerDay = Math.round((totalActions / windowDays) * 10) / 10
+
     await sendJobSearchSummaryEmail(toEmail, {
       rangeStart,
       rangeEnd: now,
@@ -151,6 +197,7 @@ export async function POST() {
       upcomingInterviews,
       stats: { totalApplied, interviewedApps, recordedOutcomes, positiveOutcomes },
       forecast,
+      goal: { dailyGoal, daysGoalMet, windowDays, series, avgPerDay },
     })
 
     return NextResponse.json({
