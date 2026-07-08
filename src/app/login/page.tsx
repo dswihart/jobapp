@@ -389,11 +389,11 @@ export default function LoginPage() {
                   return (
                     <div
                       key={day.date}
-                      className={"min-h-[88px] sm:min-h-[124px] rounded-xl px-2 py-3 sm:px-3 sm:py-4 flex flex-col items-center justify-center text-center shadow-sm " + (
-                        isToday
-                          ? "bg-blue-100 dark:bg-blue-900 border border-blue-500 dark:border-blue-400"
-                          : goalMet
-                            ? "bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-600"
+                      className={"min-h-[88px] sm:min-h-[124px] rounded-xl px-2 py-3 sm:px-3 sm:py-4 flex flex-col items-center justify-center text-center shadow-sm " + (isToday ? "ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-1 " : "") + (
+                        goalMet
+                          ? "bg-green-100 dark:bg-green-900/30 border border-green-400 dark:border-green-600"
+                          : isToday
+                            ? "bg-blue-100 dark:bg-blue-900 border border-blue-500 dark:border-blue-400"
                             : progress >= 2
                               ? "bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-400 dark:border-yellow-600"
                               : "bg-red-100 dark:bg-red-900/30 border border-red-400 dark:border-red-600"

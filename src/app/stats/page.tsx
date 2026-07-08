@@ -345,12 +345,12 @@ export default function StatsPage() {
                   <div
                     key={index}
                     title={`${weekday} ${monthShort} ${dayNum}: ${day.count} application${day.count === 1 ? '' : 's'} + ${day.interviews} interview${day.interviews === 1 ? '' : 's'} = ${day.count + day.interviews} toward goal of ${dailyGoal}`}
-                    className={`min-h-[88px] sm:min-h-[124px] px-2 py-3 sm:px-3 sm:py-4 flex flex-col items-center justify-center rounded-xl text-center border shadow-sm ${
-                      isToday
-                        ? "bg-blue-100 dark:bg-blue-900 border-blue-500 dark:border-blue-400"
-                        : day.goalMet
-                          ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600"
-                          : day.count >= 2
+                    className={`min-h-[88px] sm:min-h-[124px] px-2 py-3 sm:px-3 sm:py-4 flex flex-col items-center justify-center rounded-xl text-center border shadow-sm ${isToday ? "ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-1 dark:ring-offset-gray-800 " : ""}${
+                      day.goalMet
+                        ? "bg-green-100 dark:bg-green-900/30 border-green-400 dark:border-green-600"
+                        : isToday
+                          ? "bg-blue-100 dark:bg-blue-900 border-blue-500 dark:border-blue-400"
+                          : (day.count + day.interviews) >= 2
                             ? "bg-yellow-100 dark:bg-yellow-900/30 border-yellow-400 dark:border-yellow-600"
                             : "bg-red-100 dark:bg-red-900/30 border-red-400 dark:border-red-600"
                     }`}

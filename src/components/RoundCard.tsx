@@ -79,22 +79,28 @@ const formatDate = (dateString: string | null) => {
   return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-// Google Calendar "add event" link — floating local clock time, 1h default.
+// Google Calendar "add event" link. The wall-clock digits are emitted as-is and
+// bound to Europe/Madrid via the ctz param, so Google interprets e.g. 15:00 as
+// 15:00 Madrid — NOT as 15:00 UTC (which shifted the event by the local offset).
+const APP_TZID = 'Europe/Madrid'
 const googleCalUrl = (iv: Interview) => {
   if (!iv.scheduledDate) return '#'
   const day = iv.scheduledDate.slice(0, 10)
   const time = iv.scheduledTime && /^\d{2}:\d{2}$/.test(iv.scheduledTime) ? iv.scheduledTime : '12:00'
   const [y, m, d] = day.split('-').map(Number)
   const [hh, mm] = time.split(':').map(Number)
-  const start = new Date(Date.UTC(y, m - 1, d, hh, mm))
-  const end = new Date(start.getTime() + 60 * 60 * 1000)
-  const fmt = (dt: Date) =>
-    `${dt.getUTCFullYear()}${String(dt.getUTCMonth() + 1).padStart(2, '0')}${String(dt.getUTCDate()).padStart(2, '0')}T${String(dt.getUTCHours()).padStart(2, '0')}${String(dt.getUTCMinutes()).padStart(2, '0')}00`
+  const p2 = (n: number) => String(n).padStart(2, '0')
+  // Local wall-clock stamps (no UTC conversion); ctz tells Google the zone.
+  const startStamp = `${y}${p2(m)}${p2(d)}T${p2(hh)}${p2(mm)}00`
+  const endHh = (hh + 1) % 24
+  const endD = hh + 1 >= 24 ? new Date(Date.UTC(y, m - 1, d + 1)) : new Date(Date.UTC(y, m - 1, d))
+  const endStamp = `${endD.getUTCFullYear()}${p2(endD.getUTCMonth() + 1)}${p2(endD.getUTCDate())}T${p2(endHh)}${p2(mm)}00`
   const title = `Interview: ${iv.application?.company || 'Company'}${iv.application?.role ? ' — ' + iv.application.role : ''}`
   const params = new URLSearchParams({
     action: 'TEMPLATE',
     text: title,
-    dates: `${fmt(start)}/${fmt(end)}`,
+    dates: `${startStamp}/${endStamp}`,
+    ctz: APP_TZID,
     details: `${iv.interviewType} interview`,
   })
   return `https://calendar.google.com/calendar/render?${params.toString()}`
