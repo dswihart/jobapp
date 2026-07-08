@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import JobDetailModal from './JobDetailModal'
 import RejectReasonModal from './RejectReasonModal'
 import GoodMatchModal from './GoodMatchModal'
@@ -102,6 +102,7 @@ export default function JobOpportunities({ userId, onApplicationCreated, refresh
   const [expandedBreakdown, setExpandedBreakdown] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const pdfInputRef = useRef<HTMLInputElement>(null)
   const [rejectingJob, setRejectingJob] = useState<JobOpportunity | null>(null)
   const [approvingJob, setApprovingJob] = useState<JobOpportunity | null>(null)
 
@@ -257,6 +258,35 @@ export default function JobOpportunities({ userId, onApplicationCreated, refresh
       setImportResult('Failed to import. Please try again.')
     } finally {
       setImporting(false)
+      setTimeout(() => setImportResult(null), 8000)
+    }
+  }
+
+  const handleImportPdf = async (file: File) => {
+    setImporting(true)
+    setImportResult(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const response = await fetch('/api/opportunities/import-pdf', { method: 'POST', body: form })
+      const data = await response.json()
+      if (response.ok && data.success) {
+        const opp = data.opportunity
+        if (data.alreadyExists) {
+          setImportResult(`Already imported: ${opp.title} at ${opp.company}`)
+        } else {
+          setImportResult(`Imported: ${opp.title} at ${opp.company} (${opp.fitScore}% fit)`)
+        }
+        loadJobs()
+      } else {
+        setImportResult(data.error || 'PDF import failed')
+      }
+    } catch (error) {
+      console.error('PDF import error:', error)
+      setImportResult('Failed to import PDF. Please try again.')
+    } finally {
+      setImporting(false)
+      if (pdfInputRef.current) pdfInputRef.current.value = ''
       setTimeout(() => setImportResult(null), 8000)
     }
   }
@@ -656,13 +686,35 @@ export default function JobOpportunities({ userId, onApplicationCreated, refresh
                 {importing ? 'Importing...' : 'Import'}
               </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowPaste(!showPaste)}
-              className="text-xs text-purple-600 dark:text-purple-400 hover:underline"
-            >
-              {showPaste ? '- Hide paste box' : '+ Site blocked (LinkedIn/Indeed)? Paste the job description instead'}
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowPaste(!showPaste)}
+                className="text-xs text-purple-600 dark:text-purple-400 hover:underline"
+              >
+                {showPaste ? '- Hide paste box' : '+ Site blocked (LinkedIn/Indeed)? Paste the job description instead'}
+              </button>
+              <span className="text-xs text-gray-400">or</span>
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf,.pdf,.docx"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) handleImportPdf(f)
+                }}
+                disabled={importing}
+              />
+              <button
+                type="button"
+                onClick={() => pdfInputRef.current?.click()}
+                disabled={importing}
+                className="text-xs text-purple-600 dark:text-purple-400 hover:underline disabled:opacity-50"
+              >
+                {importing ? 'Reading…' : '+ Upload a job PDF'}
+              </button>
+            </div>
             {showPaste && (
               <textarea
                 value={importText}

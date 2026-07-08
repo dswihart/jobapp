@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { writeFile, mkdir } from 'fs/promises'
 import path from 'path'
 import { randomUUID } from 'crypto'
-import * as pdfParse from 'pdf-parse'
+import { PDFParse } from 'pdf-parse'
 import mammoth from 'mammoth'
 import { sanitizeFilename, safePathJoin } from '@/lib/safe-path'
 import { requireAuthenticatedUser } from '@/lib/api-auth'
@@ -64,9 +64,14 @@ export async function POST(request: Request) {
       }
     } else if (isPdf) {
       try {
-        // @ts-expect-error - pdfParse typing issue
-        const pdfData = await pdfParse(buffer, { max: 0 })
-        fileText = pdfData.text
+        // pdf-parse v2 class API (new PDFParse({data}).getText()).
+        const parser = new PDFParse({ data: buffer })
+        try {
+          const pdfData = await parser.getText()
+          fileText = pdfData.text
+        } finally {
+          await parser.destroy?.()
+        }
       } catch (pdfError) {
         console.error('[Upload CV] PDF parsing error:', pdfError)
         fileText = 'Failed to extract text from PDF. Please try uploading a .txt version of your resume.'
