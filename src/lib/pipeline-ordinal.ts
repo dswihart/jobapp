@@ -13,8 +13,9 @@
 export interface OrdinalInterview {
   id: string
   round: number
-  scheduledDate: string | null
-  createdAt?: string
+  // Accepts a Date (server / Prisma rows) or an ISO string (client payload).
+  scheduledDate: string | Date | null
+  createdAt?: string | Date
   status: string
 }
 

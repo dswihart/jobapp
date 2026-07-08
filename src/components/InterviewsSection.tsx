@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { CalendarIcon, PlusIcon } from '@heroicons/react/24/outline'
 import SummaryEmailButton from './SummaryEmailButton'
+import CalendarSubscribeButton from './CalendarSubscribeButton'
 import ApplicationPipeline from './ApplicationPipeline'
 import type { Interview } from '@/lib/interview-types'
 
@@ -218,6 +219,7 @@ export default function InterviewsSection({
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <CalendarSubscribeButton />
             <SummaryEmailButton />
             <button
               onClick={() => onCreateInterview()}

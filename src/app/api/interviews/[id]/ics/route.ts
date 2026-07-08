@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-
-const pad = (n: number) => String(n).padStart(2, "0")
-const esc = (s: string) => s.replace(/([,;\\])/g, "\\$1").replace(/\r?\n/g, "\\n")
+import { buildVevent, buildVcalendar, nowDtstamp } from "@/lib/ics"
+import { computeOrdinals } from "@/lib/pipeline-ordinal"
 
 // GET /api/interviews/[id]/ics — download a single interview as an .ics event.
-// Times are emitted as "floating" local time so they show at the stated clock
-// time in whatever calendar the user imports into (fine for a single-TZ user).
+// Session-authed attachment. Times are floating local (see lib/ics.ts). Uses the
+// shared builder + derived pipeline ordinal so the downloaded event matches the
+// subscribable feed (same UID) and the in-app "Round N".
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session?.user?.id) {
@@ -27,56 +27,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Interview has no scheduled date yet" }, { status: 400 })
   }
 
-  const day = new Date(interview.scheduledDate).toISOString().slice(0, 10) // YYYY-MM-DD
-  const [y, m, d] = day.split("-").map(Number)
-  const timeStr =
-    interview.scheduledTime && /^\d{2}:\d{2}$/.test(interview.scheduledTime) ? interview.scheduledTime : null
+  // Derive this interview's pipeline ordinal from its siblings so the .ics label
+  // matches the app and the feed.
+  const siblings = await prisma.interview.findMany({
+    where: { applicationId: interview.applicationId },
+    select: { id: true, round: true, scheduledDate: true, createdAt: true, status: true },
+  })
+  const ordinal = computeOrdinals(siblings).get(interview.id)
+  const roundLabel = ordinal ? `Round ${ordinal}` : `Round ${interview.round}`
 
-  let dtstart: string
-  let dtend: string
-  if (timeStr) {
-    const [hh, mm] = timeStr.split(":").map(Number)
-    const start = new Date(Date.UTC(y, m - 1, d, hh, mm))
-    const end = new Date(start.getTime() + 60 * 60 * 1000)
-    const fmt = (dt: Date) =>
-      `${dt.getUTCFullYear()}${pad(dt.getUTCMonth() + 1)}${pad(dt.getUTCDate())}T${pad(dt.getUTCHours())}${pad(dt.getUTCMinutes())}00`
-    dtstart = `DTSTART:${fmt(start)}`
-    dtend = `DTEND:${fmt(end)}`
-  } else {
-    const next = new Date(Date.UTC(y, m - 1, d + 1))
-    dtstart = `DTSTART;VALUE=DATE:${y}${pad(m)}${pad(d)}`
-    dtend = `DTEND;VALUE=DATE:${next.getUTCFullYear()}${pad(next.getUTCMonth() + 1)}${pad(next.getUTCDate())}`
-  }
+  const vevent = buildVevent(interview, interview.application || {}, roundLabel, nowDtstamp())
+  const body = buildVcalendar([vevent])
 
-  const company = interview.application?.company || "Company"
-  const role = interview.application?.role || ""
-  const summary = `Interview: ${company}${role ? " — " + role : ""}`
-  const descParts = [`${interview.interviewType} interview (round ${interview.round})`]
-  if (interview.application?.jobUrl) descParts.push(interview.application.jobUrl)
-  if (interview.preparationNotes) descParts.push(interview.preparationNotes)
-  const location = interview.meetingLink || interview.location || ""
-  const dtstamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")
-
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Job Tracker//Interview//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    `UID:interview-${interview.id}@jobapp.aigrowise.com`,
-    `DTSTAMP:${dtstamp}`,
-    dtstart,
-    dtend,
-    `SUMMARY:${esc(summary)}`,
-    `DESCRIPTION:${esc(descParts.join("\n"))}`,
-    location ? `LOCATION:${esc(location)}` : "",
-    "STATUS:CONFIRMED",
-    "END:VEVENT",
-    "END:VCALENDAR",
-  ].filter(Boolean)
-
-  return new NextResponse(lines.join("\r\n"), {
+  return new NextResponse(body, {
     status: 200,
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",

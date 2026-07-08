@@ -38,6 +38,9 @@ model User {
   scanFrequency        String?  @default("daily")
   dailyApplicationGoal Int?     @default(6)
   emailSyncEnabled     Boolean? @default(false) @map("email_sync_enabled")
+  // Opaque token for the subscribable interview calendar feed
+  // (/api/calendar/[token]/interviews.ics). Nullable = feed not yet minted.
+  calendarFeedToken    String?  @unique @map("calendar_feed_token")
   emailSyncLookbackDays Int?    @default(14) @map("email_sync_lookback_days")
   lastEmailSyncAt      DateTime? @map("last_email_sync_at")
   lastEmailSyncError   String?  @db.Text @map("last_email_sync_error")
