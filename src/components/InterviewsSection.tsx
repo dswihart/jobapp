@@ -16,7 +16,8 @@ interface InterviewsSectionProps {
 type TabFilter = 'all' | 'upcoming' | 'completed' | 'archived'
 
 interface Group {
-  application: NonNullable<Interview['application']>
+  id: string // stable company key (group identity)
+  application: NonNullable<Interview['application']> // representative application
   all: Interview[]
   visible: Interview[]
   needsActionCount: number
@@ -140,17 +141,32 @@ export default function InterviewsSection({
     }
   }
 
-  // ---- Group interviews by application ----
-  const groupsMap = new Map<string, Group>()
+  // ---- Group interviews by COMPANY (not application) ----
+  // Any interviews from the same company are the same position, so they belong
+  // to one pipeline even when they hang off more than one application row (e.g.
+  // a duplicated application). The group's representative application is the one
+  // from the most-recent interview — used for the header link and for attaching
+  // a newly-scheduled next round.
+  const activityMs = (iv: Interview) =>
+    iv.scheduledDate ? new Date(iv.scheduledDate).getTime()
+      : iv.createdAt ? new Date(iv.createdAt).getTime() : 0
+  const companyKey = (app: NonNullable<Interview['application']>) =>
+    (app.company || '').trim().toLowerCase().replace(/\s+/g, ' ') || app.id
+
+  const groupsMap = new Map<string, Group & { repActivity: number }>()
   for (const iv of interviews) {
     const app = iv.application
     if (!app) continue // orphan guard; every interview should carry its application
-    let g = groupsMap.get(app.id)
+    const key = companyKey(app)
+    let g = groupsMap.get(key)
     if (!g) {
-      g = { application: app, all: [], visible: [], needsActionCount: 0, soonestUpcoming: Infinity, latestActivity: 0 }
-      groupsMap.set(app.id, g)
+      g = { id: key, application: app, all: [], visible: [], needsActionCount: 0, soonestUpcoming: Infinity, latestActivity: 0, repActivity: -1 }
+      groupsMap.set(key, g)
     }
     g.all.push(iv)
+    // Representative application = the one from the most-recent interview.
+    const act = activityMs(iv)
+    if (act >= g.repActivity) { g.repActivity = act; g.application = app }
     if (isNeedsAction(iv)) g.needsActionCount++
     if (isUpcomingDated(iv) && iv.scheduledDate) {
       g.soonestUpcoming = Math.min(g.soonestUpcoming, new Date(iv.scheduledDate).getTime())
@@ -177,15 +193,15 @@ export default function InterviewsSection({
   })
 
   // Nearest-upcoming group (first finite soonestUpcoming) is expanded by default.
-  const nearestUpcomingId = visibleGroups.find(g => Number.isFinite(g.soonestUpcoming))?.application.id
+  const nearestUpcomingId = visibleGroups.find(g => Number.isFinite(g.soonestUpcoming))?.id
   const isExpanded = (g: Group): boolean => {
-    const override = collapseOverrides[g.application.id]
+    const override = collapseOverrides[g.id]
     if (override !== undefined) return override
-    return g.needsActionCount > 0 || g.application.id === nearestUpcomingId
+    return g.needsActionCount > 0 || g.id === nearestUpcomingId
   }
   const toggleGroup = (id: string) =>
     setCollapseOverrides(prev => {
-      const g = groups.find(x => x.application.id === id)
+      const g = groups.find(x => x.id === id)
       const currentlyExpanded = prev[id] !== undefined
         ? prev[id]
         : (!!g && (g.needsActionCount > 0 || id === nearestUpcomingId))
@@ -265,12 +281,12 @@ export default function InterviewsSection({
         ) : (
           visibleGroups.map((g) => (
             <ApplicationPipeline
-              key={g.application.id}
+              key={g.id}
               application={g.application}
               allInterviews={g.all}
               visibleInterviews={g.visible}
               expanded={isExpanded(g)}
-              onToggleCollapse={() => toggleGroup(g.application.id)}
+              onToggleCollapse={() => toggleGroup(g.id)}
               expandedRoundId={expandedRoundId}
               onToggleRound={(id) => setExpandedRoundId(expandedRoundId === id ? null : id)}
               onCreateInterview={onCreateInterview}

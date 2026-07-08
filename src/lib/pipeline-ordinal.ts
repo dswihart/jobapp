@@ -25,13 +25,17 @@ export function isCancelled(status: string | undefined | null): boolean {
   return CANCELLED.has((status || '').toLowerCase())
 }
 
-// Pipeline order: stored round asc, then earliest scheduled date (undated rounds
-// sort last), then creation order as a stable tiebreak.
+// Pipeline order: earliest scheduled date first (undated rounds sort last), then
+// stored round, then creation order as a stable tiebreak. Date-primary so a
+// company pipeline — which may merge rounds from more than one application row
+// (each with its own round sequence) — reads as one chronological timeline.
+// Within a single application (rounds renumbered by date in Phase 3) date order
+// and round order already coincide.
 export function comparePipelineOrder(a: OrdinalInterview, b: OrdinalInterview): number {
-  if (a.round !== b.round) return a.round - b.round
   const ad = a.scheduledDate ? new Date(a.scheduledDate).getTime() : Number.POSITIVE_INFINITY
   const bd = b.scheduledDate ? new Date(b.scheduledDate).getTime() : Number.POSITIVE_INFINITY
   if (ad !== bd) return ad - bd
+  if (a.round !== b.round) return a.round - b.round
   const ac = a.createdAt ? new Date(a.createdAt).getTime() : 0
   const bc = b.createdAt ? new Date(b.createdAt).getTime() : 0
   return ac - bc
