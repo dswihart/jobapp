@@ -486,7 +486,11 @@ export async function syncApplicationEmailsForUser(
                 company: newCompany,
                 role: (verdict.role || 'Unknown role').slice(0, 160),
                 status: fromInterview ? 'INTERVIEWING' : 'APPLIED',
-                appliedDate: cand.receivedAt,
+                // An interview-invitation email means you applied at some EARLIER,
+                // unknown time — NOT the day the invite arrived. Leave appliedDate
+                // null so it doesn't count as an application on the invite's day.
+                // An application-confirmation email ~= applied that day, so keep it.
+                appliedDate: fromInterview ? null : cand.receivedAt,
                 notes: `Auto-added from ${fromInterview ? 'an interview-invitation' : 'an application-confirmation'} email (${cand.receivedAt.toISOString().slice(0, 10)}): ${subject}`.slice(0, 500),
               },
               select: { id: true, company: true, role: true, status: true, notes: true, appliedDate: true },
