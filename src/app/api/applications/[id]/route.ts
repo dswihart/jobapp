@@ -68,7 +68,8 @@ export async function PUT(
     const normApplied = (v: unknown): Date | null => {
       if (!v) return null
       const s = String(v)
-      return /^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(`${s}T12:00:00.000Z`) : new Date(s)
+      const day = s.slice(0, 10) // the calendar day the field shows (YYYY-MM-DD…)
+      return /^\d{4}-\d{2}-\d{2}$/.test(day) ? new Date(`${day}T12:00:00.000Z`) : new Date(s)
     }
     let finalAppliedDate = appliedDate ? normApplied(appliedDate) : existing.appliedDate
     if ((status === 'APPLIED' || status === 'INTERVIEWING') && !finalAppliedDate) {
