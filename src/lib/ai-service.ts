@@ -736,11 +736,11 @@ async function extractJobWithMiniMax(
     if (!jsonMatch) return null
 
     const result = JSON.parse(jsonMatch[0])
-    if (result.error || !result.title || !result.company) return null
+    if (result.error || !result.title) return null
 
     return {
       title: result.title,
-      company: result.company,
+      company: result.company || 'Unknown Company',
       description: result.description || '',
       requirements: result.requirements || undefined,
       location: result.location || undefined,
@@ -775,11 +775,11 @@ async function extractJobWithOpenAI(
     if (!jsonMatch) return null
 
     const result = JSON.parse(jsonMatch[0])
-    if (result.error || !result.title || !result.company) return null
+    if (result.error || !result.title) return null
 
     return {
       title: result.title,
-      company: result.company,
+      company: result.company || 'Unknown Company',
       description: result.description || '',
       requirements: result.requirements || undefined,
       location: result.location || undefined,
@@ -828,7 +828,7 @@ ${text}
 Return ONLY valid JSON with these fields:
 {
   "title": "job title",
-  "company": "company name",
+  "company": "company name — use 'Unknown Company' if the posting does not name the hiring company (e.g. an anonymized recruiter/consultancy job spec)",
   "description": "full job description text",
   "requirements": "requirements/qualifications and skills list",
   "location": "work location or Remote or Hybrid, or null if not mentioned",
@@ -879,13 +879,13 @@ Return ONLY the JSON object, no markdown or explanation.`
       return { error: result.error }
     }
 
-    if (!result.title || !result.company) {
-      return { error: 'Could not extract job title or company from page' }
+    if (!result.title) {
+      return { error: 'Could not extract job title from page' }
     }
 
     return {
       title: result.title,
-      company: result.company,
+      company: result.company || 'Unknown Company',
       description: result.description || '',
       requirements: result.requirements || undefined,
       location: result.location || undefined,
@@ -926,7 +926,7 @@ ${trimmedText}
 Return ONLY valid JSON with these fields:
 {
   "title": "job title",
-  "company": "company name",
+  "company": "company name — use 'Unknown Company' if the posting does not name the hiring company (e.g. an anonymized recruiter/consultancy job spec)",
   "description": "full job description text",
   "requirements": "requirements/qualifications and skills list",
   "location": "work location or Remote or Hybrid, or null if not mentioned",
@@ -977,17 +977,19 @@ Return ONLY the JSON object, no markdown or explanation.`
       return { error: result.error === 'not_a_job_posting' ? 'Page does not contain a job posting (may require login)' : result.error }
     }
 
-    if (!result.title || !result.company) {
-      return { error: 'Could not extract job title or company from page' }
+    if (!result.title) {
+      return { error: 'Could not extract job title from page' }
     }
 
     return {
       title: result.title,
-      company: result.company,
+      company: result.company || 'Unknown Company',
       description: result.description || '',
       requirements: result.requirements || undefined,
       location: result.location || undefined,
-      salary: result.salary || undefined
+      salary: result.salary || undefined,
+      employmentType: result.employmentType || undefined,
+      experienceLevel: result.experienceLevel || undefined,
     }
   } catch (error) {
     console.error('[Import] AI text extraction error:', error)

@@ -80,6 +80,7 @@ export async function POST(request: Request) {
     console.log(`[Import PDF] Extracting job from ${text.length} chars of "${safeName}"...`)
     const extracted = await extractJobFromText(text, syntheticUrl)
     if (!extracted || extracted.error || !extracted.title || !extracted.company) {
+      console.warn(`[Import PDF] Extraction failed for "${safeName}":`, JSON.stringify(extracted))
       return NextResponse.json(
         { error: extracted?.error || 'Could not identify a job posting in this document.' },
         { status: 422 }
