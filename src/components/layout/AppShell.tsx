@@ -46,6 +46,7 @@ export default function AppShell() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [applications, setApplications] = useState<Application[]>([])
+  const [interviewsToday, setInterviewsToday] = useState(0)
   const [editingApp, setEditingApp] = useState<Application | null>(null)
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [opportunityRefreshTrigger, setOpportunityRefreshTrigger] = useState(0)
@@ -60,7 +61,13 @@ export default function AppShell() {
   useEffect(() => {
     fetchUser()
     autoArchiveStale().then(fetchApplications)
+    fetchInterviewsToday()
   }, [])
+
+  // Refresh today's interview count whenever interviews change elsewhere.
+  useEffect(() => {
+    fetchInterviewsToday()
+  }, [interviewRefreshTrigger])
 
   useEffect(() => {
     if (!scanBanner) return
@@ -98,6 +105,24 @@ export default function AppShell() {
       }
     } catch (error) {
       console.error('Failed to fetch applications:', error)
+    }
+  }
+
+  const fetchInterviewsToday = async () => {
+    try {
+      const response = await fetch('/api/interviews', { cache: 'no-store' })
+      if (!response.ok) return
+      const data = await response.json()
+      const list: Array<{ scheduledDate: string | null; status: string }> = Array.isArray(data?.interviews) ? data.interviews : []
+      const today = new Date().toDateString()
+      const count = list.filter(iv =>
+        iv.scheduledDate &&
+        iv.status !== 'cancelled' && iv.status !== 'canceled' &&
+        new Date(iv.scheduledDate).toDateString() === today
+      ).length
+      setInterviewsToday(count)
+    } catch (error) {
+      console.error('Failed to fetch interviews:', error)
     }
   }
 
@@ -301,6 +326,7 @@ export default function AppShell() {
                 const d = a.appliedDate || a.createdAt
                 return d ? new Date(d).toDateString() === new Date().toDateString() : false
               }).length}
+              interviewsToday={interviewsToday}
               goal={user?.dailyApplicationGoal ?? 4}
             />
           )}

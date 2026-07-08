@@ -25,10 +25,12 @@ const MESSAGES = [
 export default function DailyEncouragement({
   name,
   appliedToday,
+  interviewsToday = 0,
   goal,
 }: {
   name?: string
   appliedToday: number
+  interviewsToday?: number
   goal: number
 }) {
   const dayIndex = Math.floor(Date.now() / 86_400_000)
@@ -36,9 +38,11 @@ export default function DailyEncouragement({
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
   const firstName = name ? name.split(' ')[0] : ''
-  const safeGoal = goal > 0 ? goal : 6
-  const pct = Math.min(100, Math.round((appliedToday / safeGoal) * 100))
-  const done = appliedToday >= safeGoal
+  const safeGoal = goal > 0 ? goal : 4
+  // The daily goal counts applications sent AND interviews that day.
+  const total = appliedToday + interviewsToday
+  const pct = Math.min(100, Math.round((total / safeGoal) * 100))
+  const done = total >= safeGoal
 
   return (
     <div className="mb-4 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 text-white p-4 shadow-sm">
@@ -52,8 +56,9 @@ export default function DailyEncouragement({
         <div className="text-right shrink-0">
           <p className="text-xs opacity-90">Today’s goal</p>
           <p className="text-lg font-semibold">
-            {appliedToday} / {safeGoal} {done ? '🎉' : ''}
+            {total} / {safeGoal} {done ? '🎉' : ''}
           </p>
+          <p className="text-[11px] opacity-90">{appliedToday} applied · {interviewsToday} 🎙️</p>
           <div className="mt-1 h-1.5 w-36 bg-white/30 rounded-full overflow-hidden">
             <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pct}%` }} />
           </div>
