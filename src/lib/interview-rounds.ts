@@ -88,6 +88,29 @@ export async function createInterviewWithRound(
           data: { ...data, applicationId, round: nextRound },
           select: { id: true, round: true },
         })
+
+        // Advancing to a new round implies the earlier rounds that already
+        // happened are done — auto-mark prior scheduled/rescheduled rounds whose
+        // date is in the PAST as completed, so the pipeline reflects reality
+        // without manual bookkeeping. Guards:
+        //  - Only PAST rounds (scheduledDate <= now): a still-upcoming earlier
+        //    round must never be flipped to completed just because a later round
+        //    was logged (rounds can be entered out of order).
+        //  - Skipped when the NEW round is an unconfirmed auto-detected row: a
+        //    mis-detected email must never silently complete a real round.
+        //  - Cancelled / needs_scheduling / dateless / already-completed untouched.
+        if (!data.autoDetected) {
+          await tx.interview.updateMany({
+            where: {
+              applicationId,
+              round: { lt: nextRound },
+              status: { in: ['scheduled', 'rescheduled'] },
+              scheduledDate: { lte: new Date() },
+            },
+            data: { status: 'completed' },
+          })
+        }
+
         await recomputeApplicationStatus(tx, applicationId)
         return created
       })

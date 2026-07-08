@@ -6,6 +6,8 @@ import { createHash } from 'crypto'
 import { extractJobFromText, analyzeJobFitEnhanced } from '@/lib/ai-service'
 import { PDFParse } from 'pdf-parse'
 import mammoth from 'mammoth'
+import { writeFile, mkdir } from 'fs/promises'
+import path from 'path'
 
 // POST /api/opportunities/import-pdf — import a job from an uploaded PDF (or
 // DOCX). Extracts the document text, runs it through the SAME AI extraction +
@@ -140,6 +142,30 @@ export async function POST(request: Request) {
       },
     })
 
+    // Attach the source document to the opportunity so it can be re-opened later.
+    // Stored under public/uploads/opportunities as `${userId}-${id}.<ext>`: the
+    // userId prefix satisfies the /uploads ownership middleware, and it is served
+    // through the auth+ownership route /api/opportunities/[id]/attachment. A
+    // write failure must not fail the import (the job is already saved).
+    let attachment = opportunity
+    try {
+      const ext = isPdf ? 'pdf' : 'docx'
+      const diskName = `${userId}-${opportunity.id}.${ext}`
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'opportunities')
+      await mkdir(uploadDir, { recursive: true })
+      await writeFile(path.join(uploadDir, diskName), buffer)
+      attachment = await prisma.jobOpportunity.update({
+        where: { id: opportunity.id },
+        data: {
+          attachmentPath: `/uploads/opportunities/${diskName}`,
+          attachmentName: (file.name || `document.${ext}`).slice(0, 200),
+          attachmentType: isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        },
+      })
+    } catch (attachErr) {
+      console.error('[Import PDF] Could not attach source file:', attachErr)
+    }
+
     console.log(`[Import PDF] Saved: ${extracted.title} at ${extracted.company} (${fitScore.overall}% fit)`)
 
     const threshold = user.notificationThreshold ?? 80
@@ -154,7 +180,7 @@ export async function POST(request: Request) {
       })
     }
 
-    return NextResponse.json({ success: true, opportunity }, { status: 201 })
+    return NextResponse.json({ success: true, opportunity: attachment }, { status: 201 })
   } catch (error) {
     console.error('[Import PDF] Error:', error)
     return NextResponse.json(

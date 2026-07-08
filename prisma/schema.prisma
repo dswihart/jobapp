@@ -87,7 +87,10 @@ model Application {
   interviewTime String? @map("interview_time") // Store time separately for easier formatting
   interviewType String? @map("interview_type") // phone, video, in-person, etc.
   interviewRound Int? @default(1) @map("interview_round") // Track which round of interviews
-  interviewNotes String? @map("interview_notes") @db.Text
+  interviewNotes String? @map("interview_notes") @db.Text // LEGACY per-app notes (Phase 4 seeds these into notesThread)
+
+  // Phase 4: shared "enter once" interview prep blurb inherited across rounds.
+  interviewContext String? @db.Text @map("interview_context")
 
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
@@ -105,6 +108,10 @@ model Application {
   followUps FollowUp[]
   emailSyncEvents EmailSyncEvent[]
   interviews Interview[]
+  // Phase 4: app-scoped roster + running notes thread (relation names avoid the
+  // legacy scalar `interviewNotes` above).
+  appInterviewers Interviewer[]   @relation("AppInterviewers")
+  notesThread     InterviewNote[]
 
   @@map("applications")
 }
@@ -159,6 +166,11 @@ model JobOpportunity {
   experienceLevel String?
   userFeedback String?
   notes        String?   @db.Text
+  // Source document attached on PDF/DOCX import — served via an auth+ownership
+  // route (/api/opportunities/[id]/attachment), path relative to /public.
+  attachmentPath String? @map("attachment_path")
+  attachmentName String? @map("attachment_name")
+  attachmentType String? @map("attachment_type")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -531,24 +543,52 @@ model Interview {
 
 model Interviewer {
   id            String   @id @default(cuid())
-  interviewId   String   @map("interview_id")
-  
+  // Phase 4: relaxed to nullable. An app-scoped roster row (entered once,
+  // inherited across rounds) carries applicationId and interviewId=null; a
+  // legacy per-round row still carries interviewId. Read layer unions both.
+  interviewId   String?  @map("interview_id")
+  applicationId String?  @map("application_id")
+
   name          String
   title         String?  // Job title/role
   department    String?
   email         String?
   linkedInUrl   String?  @map("linkedin_url")
   notes         String?  @db.Text // Personal notes about this interviewer
-  
+
   // Impression tracking
   impression    String?  // positive, neutral, negative
   topics        String[] @default([]) // Topics they focused on
-  
+
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  interview     Interview @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  
+  // SetNull (not Cascade): deleting a round must NOT delete a roster member that
+  // Phase 4 promises is inherited across rounds — it just detaches from the round
+  // and stays app-scoped.
+  interview     Interview?   @relation(fields: [interviewId], references: [id], onDelete: SetNull)
+  application   Application? @relation("AppInterviewers", fields: [applicationId], references: [id], onDelete: Cascade)
+
   @@index([interviewId])
+  @@index([applicationId])
   @@map("interviewers")
+}
+
+// Phase 4: an append-only running notes thread shared across all rounds of an
+// application ("enter once, inherited across rounds"). Never overwritten — the
+// InterviewDetailModal's per-round fields keep their own columns; this is the
+// cross-round narrative.
+model InterviewNote {
+  id            String   @id @default(cuid())
+  applicationId String   @map("application_id")
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  interviewId   String?  @map("interview_id") // round it came from; null = general thread note
+  round         Int?     // display snapshot (context only)
+  body          String   @db.Text
+  authorType    String   @default("user") @map("author_type") // user | ai | email_sync | backfill
+  sourceKey     String?  @unique @map("source_key") // idempotency marker for backfill; NULL for live appends
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([applicationId, createdAt])
+  @@map("interview_notes")
 }

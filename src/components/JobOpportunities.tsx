@@ -9,6 +9,7 @@ import {
   SparklesIcon,
   FunnelIcon,
   CheckCircleIcon,
+  PaperClipIcon,
   ArrowPathIcon,
   HandThumbUpIcon,
   HandThumbDownIcon,
@@ -38,6 +39,8 @@ interface JobOpportunity {
   userFeedback?: string
   notes?: string
   scoreBreakdown?: string
+  attachmentName?: string | null
+  attachmentPath?: string | null
 }
 
 interface JobOpportunitiesProps {
@@ -512,6 +515,18 @@ export default function JobOpportunities({ userId, onApplicationCreated, refresh
                       title={job.sourceUrl}
                     >
                       {extractDomain(job.sourceUrl)}
+                    </a>
+                  )}
+                  {job.attachmentPath && (
+                    <a
+                      href={`/api/opportunities/${job.id}/attachment`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/20 dark:text-rose-300"
+                      title={job.attachmentName || 'View attached document'}
+                    >
+                      <PaperClipIcon className="h-3.5 w-3.5" /> PDF
                     </a>
                   )}
                 </div>

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createLLMClient } from '@/lib/llm-client'
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { buildSharedInterviewContext } from "@/lib/interview-context"
 import Anthropic from "@anthropic-ai/sdk"
 
 // POST - Analyze interview transcript with AI
@@ -51,8 +52,11 @@ export async function POST(
       }, { status: 400 })
     }
 
-    // Build context for AI analysis
+    // Build context for AI analysis. Phase 4: fold in the wider process context
+    // (prior rounds/outcomes, app-scoped roster, shared prep blurb, recent notes)
+    // so nextRoundPreparation has real prior-round input. Capped in the helper.
     const interviewerNames = interview.interviewers.map(i => i.name).join(", ")
+    const sharedContext = await buildSharedInterviewContext(interview.applicationId, { excludeInterviewId: id })
     const context = `
 Company: ${application.company}
 Role: ${application.role}
@@ -61,6 +65,7 @@ Interview Round: ${interview.round}
 Stage: ${interview.stage || "Not specified"}
 ${interviewerNames ? `Interviewers: ${interviewerNames}` : ""}
 ${interview.preparationNotes ? `Preparation Notes: ${interview.preparationNotes}` : ""}
+${sharedContext ? `\nWider interview-process context:\n${sharedContext}` : ""}
     `.trim()
 
     const systemPrompt = `You are an expert interview coach and career advisor. Analyze interview transcripts to provide actionable insights. Be specific, constructive, and focus on helping the candidate improve and succeed.

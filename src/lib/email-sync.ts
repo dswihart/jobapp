@@ -42,6 +42,7 @@ export type EmailSyncSummary = {
   matched: number
   interviewsDetected: number
   rejectionsDetected: number
+  rejectionsApplied: number
   updatesDetected: number
   createdInterviews: number
   createdApplications: number
@@ -367,6 +368,7 @@ export async function syncApplicationEmailsForUser(
     matched: 0,
     interviewsDetected: 0,
     rejectionsDetected: 0,
+    rejectionsApplied: 0,
     updatesDetected: 0,
     createdInterviews: 0,
     createdApplications: 0,
@@ -542,6 +544,60 @@ export async function syncApplicationEmailsForUser(
           },
         })
 
+        // A confident rejection email closes out the tracked application. Move it
+        // to REJECTED automatically so the board reflects reality without a manual
+        // edit. Guards: only when mapped to a tracked application, only a
+        // confident REJECTION verdict, never overwriting a terminal ARCHIVED/
+        // REJECTED state (idempotent), and fully reversible by the user. The
+        // reason is appended to notes for provenance. Any FUTURE or date-TBD open
+        // interview rounds for that application are cancelled too, so the reminder
+        // cron (which does not itself check status) can't email about interviews
+        // for a dead application. Past rounds are left as historical record.
+        if (classification === 'REJECTION' && matched && verdict.confidence >= 60) {
+          // Disambiguation guard: association is by company name only, so when the
+          // user has more than one OPEN application at this company (e.g. two
+          // different roles), a rejection for one could land on the other and
+          // wrongly kill a live process. In that ambiguous case, record the event
+          // (already done above) but leave status changes to the user.
+          const openSameCompany = applications.filter(
+            a =>
+              normalizeText(a.company) === normalizeText(matched!.company) &&
+              a.status !== 'REJECTED' &&
+              a.status !== 'ARCHIVED'
+          )
+          if (matched.status === 'REJECTED' || matched.status === 'ARCHIVED') {
+            // Already terminal — idempotent no-op.
+          } else if (openSameCompany.length > 1) {
+            console.log(
+              `[Email Sync] Rejection for "${matched.company}" NOT auto-applied: ${openSameCompany.length} open applications at this company — ambiguous, left for manual review.`
+            )
+          } else {
+            const stamp = cand.receivedAt.toISOString().slice(0, 10)
+            const rejectionNote = `Auto-marked REJECTED from a rejection email (${stamp}): ${subject}`.slice(0, 500)
+            await prisma.application.update({
+              where: { id: matched.id },
+              data: {
+                status: 'REJECTED',
+                notes: matched.notes ? `${matched.notes}\n${rejectionNote}`.slice(0, 4000) : rejectionNote,
+              },
+            })
+            const cancelled = await prisma.interview.updateMany({
+              where: {
+                applicationId: matched.id,
+                status: { in: ['scheduled', 'rescheduled', 'needs_scheduling'] },
+                OR: [{ scheduledDate: null }, { scheduledDate: { gte: cand.receivedAt } }],
+              },
+              data: { status: 'cancelled' },
+            })
+            matched.status = 'REJECTED'
+            summary.rejectionsApplied++
+            console.log(
+              `[Email Sync] Auto-marked "${matched.company}" as REJECTED from a rejection email ` +
+              `(confidence ${verdict.confidence})${cancelled.count ? `; cancelled ${cancelled.count} open interview round(s)` : ''}.`
+            )
+          }
+        }
+
         // Auto-create an interview from a detected invitation tied to a tracked
         // application. Deduped against existing interviews for the same
         // application within a ±2-day window so invite + reminder + "next steps"
@@ -552,7 +608,15 @@ export async function syncApplicationEmailsForUser(
         // silently dropped (e.g. the Allianz HR-interview invite on 2026-06-30),
         // which is worse than surfacing a pending-confirmation row the user can
         // dismiss. Auto-creating a whole application above still requires >= 60.
-        if (classification === 'INTERVIEW' && matched) {
+        if (
+          classification === 'INTERVIEW' &&
+          matched &&
+          matched.status !== 'REJECTED' &&
+          matched.status !== 'ARCHIVED'
+        ) {
+          // Don't auto-create interview rounds on a dead (REJECTED/ARCHIVED)
+          // application — e.g. a stale "next steps" email arriving after a
+          // rejection was already auto-applied.
           // Create the interview even when the email has no concrete date yet
           // (the common "let's find a time" / Calendly invite). Dated email ->
           // status 'scheduled'; dateless -> 'needs_scheduling' with a null date

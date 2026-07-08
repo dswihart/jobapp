@@ -106,8 +106,9 @@ export default function StatsPage() {
   // Goal tracker state
   const [applications, setApplications] = useState<Application[]>([])
   const [userData, setUserData] = useState<UserData | null>(null)
-  const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; goalMet: boolean }>>([])
+  const [pastDaysGoals, setPastDaysGoals] = useState<Array<{ date: string; count: number; interviews: number; goalMet: boolean }>>([])
   const [last14DaysTotal, setLast14DaysTotal] = useState(0)
+  const [last14DaysInterviews, setLast14DaysInterviews] = useState(0)
   const [todayCount, setTodayCount] = useState(0)
 
   useEffect(() => {
@@ -135,15 +136,17 @@ export default function StatsPage() {
         const response = await fetch(`/api/stats/user/${userId}?days=${gridDays}`, { cache: 'no-store' })
         if (!response.ok) return
         const data = await response.json()
-        const dailyStats: Array<{ date: string; count: number }> = Array.isArray(data?.dailyStats) ? data.dailyStats : []
+        const dailyStats: Array<{ date: string; count: number; interviews?: number }> = Array.isArray(data?.dailyStats) ? data.dailyStats : []
         const goalData = dailyStats.map(day => ({
           date: day.date,
           count: day.count || 0,
+          interviews: day.interviews || 0,
           goalMet: (day.count || 0) >= dailyGoal
         }))
         if (cancelled) return
         setPastDaysGoals(goalData)
         setLast14DaysTotal(goalData.reduce((sum, day) => sum + day.count, 0))
+        setLast14DaysInterviews(goalData.reduce((sum, day) => sum + day.interviews, 0))
         setTodayCount(goalData.length ? goalData[goalData.length - 1].count : 0)
       } catch (error) {
         console.error('Failed to load daily stats:', error)
@@ -306,11 +309,20 @@ export default function StatsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Last {gridDays} Days</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">Total applications</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">Applications &middot; Interviews</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-3xl font-bold text-gray-900 dark:text-white">{last14DaysTotal}</div>
-                  <div className="text-xs text-gray-500">/ {dailyGoal * gridDays} goal</div>
+                  <div className="flex items-baseline justify-end gap-3">
+                    <div>
+                      <span className="text-3xl font-bold text-gray-900 dark:text-white">{last14DaysTotal}</span>
+                      <span className="text-xs text-gray-500 ml-1">apps</span>
+                    </div>
+                    <div>
+                      <span className="text-3xl font-bold text-purple-600 dark:text-purple-400">{last14DaysInterviews}</span>
+                      <span className="text-xs text-gray-500 ml-1">🎙️</span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500">/ {dailyGoal * gridDays} application goal</div>
                 </div>
               </div>
             </div>
@@ -332,7 +344,7 @@ export default function StatsPage() {
                 return (
                   <div
                     key={index}
-                    title={`${weekday} ${monthShort} ${dayNum}: ${day.count} applications`}
+                    title={`${weekday} ${monthShort} ${dayNum}: ${day.count} application${day.count === 1 ? '' : 's'}${day.interviews ? `, ${day.interviews} interview${day.interviews === 1 ? '' : 's'}` : ''}`}
                     className={`min-h-[88px] sm:min-h-[124px] px-2 py-3 sm:px-3 sm:py-4 flex flex-col items-center justify-center rounded-xl text-center border shadow-sm ${
                       isToday
                         ? "bg-blue-100 dark:bg-blue-900 border-blue-500 dark:border-blue-400"
@@ -355,6 +367,14 @@ export default function StatsPage() {
                     }`}>
                       {day.count}
                     </div>
+                    {day.interviews > 0 && (
+                      <div
+                        className="mt-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-[9px] sm:text-xs font-semibold leading-none"
+                        title={`${day.interviews} interview${day.interviews === 1 ? '' : 's'} scheduled/completed`}
+                      >
+                        🎙️ {day.interviews}
+                      </div>
+                    )}
                   </div>
                 )
               })}

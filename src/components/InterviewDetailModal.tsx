@@ -198,9 +198,13 @@ export default function InterviewDetailModal({
           status: nextStatus,
           outcome: formData.outcome || null,
           preparationNotes: formData.preparationNotes || null,
-          postInterviewNotes: null,
+          // Phase 4: preserve these per-round fields instead of hard-nulling them
+          // on every save. The running cross-round narrative now lives in the
+          // application notes thread; this modal must never silently wipe a
+          // round's post-notes / company feedback.
+          postInterviewNotes: formData.postInterviewNotes || null,
           transcript: formData.transcript || null,
-          companyFeedback: null,
+          companyFeedback: formData.companyFeedback || null,
           // Saving an auto-detected interview that now has a date confirms it
           // (clears the reminder-suppression stamp). With no date we keep it
           // auto-detected so the "add the date, then confirm" prompt stays.

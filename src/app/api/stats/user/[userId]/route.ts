@@ -59,6 +59,24 @@ export async function GET(
       return acc
     }, {} as Record<string, number>)
 
+    // Interviews for the daily grid. Interview has no direct userId, so map via
+    // the user's applications (mirrors /api/interviews). Count a day's interviews
+    // by scheduledDate, excluding cancelled ones — this covers both "scheduled"
+    // and already-"completed" rounds that fell on that calendar day.
+    const userAppIds = (
+      await prisma.application.findMany({ where: { userId }, select: { id: true } })
+    ).map(a => a.id)
+    const userInterviews = userAppIds.length
+      ? await prisma.interview.findMany({
+          where: {
+            applicationId: { in: userAppIds },
+            scheduledDate: { not: null },
+            status: { notIn: ['cancelled', 'canceled'] },
+          },
+          select: { scheduledDate: true },
+        })
+      : []
+
     const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     // Bucket by the user's local (Europe/Madrid) calendar days so "today" shows
@@ -77,6 +95,11 @@ export async function GET(
         }
       })
 
+      // Interviews scheduled/completed on this calendar day (same bucket window).
+      const interviews = userInterviews.filter(
+        iv => iv.scheduledDate! >= bucket.start && iv.scheduledDate! < bucket.end
+      ).length
+
       // Label parts from the bucket's calendar date (UTC-read to avoid re-shifting).
       const labelDate = new Date(bucket.dateStr)
       const dayName = dayLabels[labelDate.getUTCDay()]
@@ -86,6 +109,7 @@ export async function GET(
       dailyStats.push({
         date: bucket.dateStr,
         count,
+        interviews,
         dayLabel: dayName + ', ' + monthName + ' ' + dayNum
       })
     }

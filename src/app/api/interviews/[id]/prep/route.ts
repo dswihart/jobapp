@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { createLLMClient } from "@/lib/llm-client"
+import { buildSharedInterviewContext } from "@/lib/interview-context"
 
 // POST /api/interviews/[id]/prep — opt-in AI interview prep. Cached in
 // interview.prepBrief; pass { regenerate: true } to force a refresh. Routes
@@ -33,8 +34,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const company = interview.application?.company || "the company"
     const role = interview.application?.role || "the role"
 
+    // Phase 4: inherit context from earlier rounds (prior outcomes, roster,
+    // shared prep blurb, recent notes), capped to protect the latency budget.
+    const sharedContext = await buildSharedInterviewContext(interview.applicationId, { excludeInterviewId: id })
+
     const prompt = `You are an expert interview coach for a cybersecurity job seeker.
 They have a ${interview.interviewType} interview (round ${interview.round}) for the role "${role}" at "${company}".
+${sharedContext ? `\nContext from this application's interview process so far:\n${sharedContext}\n` : ''}
 Produce concise, specific, practical prep. Return ONLY valid JSON with this exact shape:
 {
   "companyBrief": "2-3 sentences on the company and what this role likely focuses on",

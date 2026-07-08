@@ -48,10 +48,31 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Interviews scheduled/completed, bucketed by scheduled date. Interview has
+    // no userId, so scope via the same set of applications this query covers.
+    const scopedAppIds = (
+      await prisma.application.findMany({
+        where: userId ? { userId } : {},
+        select: { id: true },
+      })
+    ).map(a => a.id)
+    const interviewRows = scopedAppIds.length
+      ? await prisma.interview.findMany({
+          where: {
+            applicationId: { in: scopedAppIds },
+            scheduledDate: { not: null },
+            status: { notIn: ['cancelled', 'canceled'] },
+          },
+          select: { scheduledDate: true },
+        })
+      : []
+
     // Group jobs added by created date
     const addedDateMap = new Map<string, number>()
     // Group jobs applied by applied date
     const appliedDateMap = new Map<string, number>()
+    // Group interviews by scheduled date
+    const interviewDateMap = new Map<string, number>()
 
     applications.forEach(app => {
       // Track when job was added (created)
@@ -68,14 +89,20 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Get all unique dates from both maps
-    const allDates = new Set([...addedDateMap.keys(), ...appliedDateMap.keys()])
+    interviewRows.forEach(iv => {
+      const d = iv.scheduledDate!.toISOString().split('T')[0]
+      interviewDateMap.set(d, (interviewDateMap.get(d) || 0) + 1)
+    })
+
+    // Get all unique dates from all maps
+    const allDates = new Set([...addedDateMap.keys(), ...appliedDateMap.keys(), ...interviewDateMap.keys()])
 
     // Convert to array of objects for the chart
     const data = Array.from(allDates).sort().map(date => ({
       date,
       added: addedDateMap.get(date) || 0,
       applied: appliedDateMap.get(date) || 0,
+      interviews: interviewDateMap.get(date) || 0,
       formattedDate: new Date(date).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric'
@@ -100,6 +127,7 @@ export async function GET(request: NextRequest) {
       recentDays: recentData,
       total: totalAdded,
       totalApplied: totalApplied,
+      totalInterviews: interviewRows.length,
       rangeDays: days,
     })
   } catch (error) {

@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 import Link from 'next/link'
 import RoundCard from './RoundCard'
+import SharedContextPanel from './SharedContextPanel'
 import type { Interview, PipelineApplication } from '@/lib/interview-types'
 import { computeOrdinals, inPipelineOrder, roundCount } from '@/lib/pipeline-ordinal'
 
@@ -120,6 +121,9 @@ export default function ApplicationPipeline({
               </a>
             )}
           </div>
+
+          {/* Phase 4: roster + prep blurb + notes shared across every round. */}
+          <SharedContextPanel applicationId={application.id} />
 
           {orderedVisible.map((interview) => (
             <RoundCard
