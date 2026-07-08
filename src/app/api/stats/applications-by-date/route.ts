@@ -79,13 +79,13 @@ export async function GET(request: NextRequest) {
       const createdDate = app.createdAt.toISOString().split('T')[0]
       addedDateMap.set(createdDate, (addedDateMap.get(createdDate) || 0) + 1)
 
-      // Track when job was applied (if appliedDate exists or status is APPLIED)
+      // Count an application on a day ONLY by its real appliedDate. (No createdAt
+      // fallback: an app with no applied date — e.g. one auto-created from an
+      // interview-invite email — must not appear as an application on its import
+      // day. Matches the daily goal grid, which also counts only appliedDate.)
       if (app.appliedDate) {
         const appliedDate = new Date(app.appliedDate).toISOString().split('T')[0]
         appliedDateMap.set(appliedDate, (appliedDateMap.get(appliedDate) || 0) + 1)
-      } else if (app.status === 'APPLIED' || app.status === 'INTERVIEWING') {
-        // If no appliedDate but status is APPLIED/INTERVIEWING, use createdAt as fallback
-        appliedDateMap.set(createdDate, (appliedDateMap.get(createdDate) || 0) + 1)
       }
     })
 
@@ -117,9 +117,7 @@ export async function GET(request: NextRequest) {
 
     // Calculate totals
     const totalAdded = applications.length
-    const totalApplied = applications.filter(app =>
-      app.appliedDate || app.status === 'APPLIED' || app.status === 'INTERVIEWING'
-    ).length
+    const totalApplied = applications.filter(app => app.appliedDate).length
 
     return NextResponse.json({
       success: true,
