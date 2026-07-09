@@ -54,11 +54,15 @@ export default function DailyEncouragement({
           <p className="font-medium">{message}</p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-xs opacity-90">Today’s goal</p>
-          <p className="text-lg font-semibold">
-            {total} / {safeGoal} {done ? '🎉' : ''}
+          <p className="text-xs opacity-90">Today’s progress</p>
+          <p className="text-lg font-semibold flex items-baseline justify-end gap-1.5">
+            <span>{appliedToday}</span>
+            <span className="text-xs font-normal opacity-90">applied</span>
+            {interviewsToday > 0 && (
+              <span className="text-sm font-normal" title={`${interviewsToday} interview${interviewsToday === 1 ? '' : 's'} today`}>🎙️ {interviewsToday}</span>
+            )}
           </p>
-          <p className="text-[11px] opacity-90">{appliedToday} applied · {interviewsToday} 🎙️</p>
+          <p className="text-[11px] opacity-90">Goal {safeGoal}{done ? ' · met 🎉' : ` · ${total}/${safeGoal}`}</p>
           <div className="mt-1 h-1.5 w-36 bg-white/30 rounded-full overflow-hidden">
             <div className="h-full bg-white rounded-full transition-all" style={{ width: `${pct}%` }} />
           </div>

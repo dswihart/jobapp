@@ -303,11 +303,18 @@ export default function StatsPage() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <div className={`text-3xl font-bold ${todayProgress >= dailyGoal ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
-                    {todayProgress}
+                  <div className="flex items-baseline justify-end gap-1.5">
+                    <span className={`text-3xl font-bold ${todayProgress >= dailyGoal ? 'text-green-600' : 'text-gray-900 dark:text-white'}`}>
+                      {todayCount}
+                    </span>
+                    <span className="text-xs text-gray-500">applied</span>
+                    {todayInterviews > 0 && (
+                      <span className="text-sm" title={`${todayInterviews} interview${todayInterviews === 1 ? '' : 's'} today`}>
+                        🎙️ {todayInterviews}
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs text-gray-500">/ {dailyGoal} goal</div>
-                  <div className="text-[11px] text-gray-400">{todayCount} applied · {todayInterviews} 🎙️</div>
+                  <div className="text-xs text-gray-500">Goal {dailyGoal}{todayProgress >= dailyGoal ? ' · met 🎉' : ` · ${todayProgress}/${dailyGoal}`}</div>
                 </div>
               </div>
             </div>
@@ -315,14 +322,21 @@ export default function StatsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-medium text-gray-600 dark:text-gray-400">Last {gridDays} Days</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-500">Applications + interviews</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-500">Applications &amp; interviews</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-3xl font-bold text-gray-900 dark:text-white">
-                    {last14DaysProgress}
-                    <span className="text-sm font-normal text-gray-500"> / {dailyGoal * gridDays}</span>
+                  <div className="flex items-baseline justify-end gap-1.5">
+                    <span className="text-3xl font-bold text-gray-900 dark:text-white">
+                      {last14DaysTotal}
+                    </span>
+                    <span className="text-xs text-gray-500">applied</span>
+                    {last14DaysInterviews > 0 && (
+                      <span className="text-sm" title={`${last14DaysInterviews} interview${last14DaysInterviews === 1 ? '' : 's'}`}>
+                        🎙️ {last14DaysInterviews}
+                      </span>
+                    )}
                   </div>
-                  <div className="text-[11px] text-gray-400">{last14DaysTotal} applied · {last14DaysInterviews} 🎙️</div>
+                  <div className="text-[11px] text-gray-400">Goal {dailyGoal * gridDays} · {last14DaysProgress} toward goal</div>
                 </div>
               </div>
             </div>
@@ -365,7 +379,7 @@ export default function StatsPage() {
                           ? "text-yellow-700 dark:text-yellow-400"
                           : "text-red-700 dark:text-red-400"
                     }`}>
-                      {day.count + day.interviews}
+                      {day.count}
                     </div>
                     {day.interviews > 0 && (
                       <div
