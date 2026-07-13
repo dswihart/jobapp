@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
               orderBy: { fitScore: 'desc' }
             })
 
-            if (newJobs.length > 0) {
+            if (false /* new-job match emails disabled 2026-07-13 per user; restore to "newJobs.length > 0" to re-enable */ && newJobs.length > 0) {
               await sendNewJobsEmail(process.env.NOTIFY_EMAIL || user.email, newJobs).catch(err =>
                 console.error(`[Cron Scan] Email failed for ${user.email}:`, err)
               )
